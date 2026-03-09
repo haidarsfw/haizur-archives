@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { speakerNames } from "./words";
-import { loadFullHistory } from "./dataLoader";
+import { loadFullHistory, PLATFORMS } from "./dataLoader";
+import PlatformIcon from "./PlatformIcons";
 
-// Fun words to auto-suggest
 const RANDOM_WORDS = [
     "love", "sorry", "miss", "haha", "lol", "sleep", "hungry",
     "ok", "no", "yes", "please", "happy", "sad", "work", "busy",
@@ -12,11 +12,10 @@ const RANDOM_WORDS = [
 
 export default function StatsBattle({ otherUsers = {} }) {
     const [query, setQuery] = useState("");
-    const [stats, setStats] = useState(null); // { p1: 10, p2: 5, term: "love" }
+    const [stats, setStats] = useState(null);
     const [fullHistory, setFullHistory] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Load data on mount
     useEffect(() => {
         loadFullHistory()
             .then(data => {
@@ -29,39 +28,28 @@ export default function StatsBattle({ otherUsers = {} }) {
             });
     }, []);
 
-    // Get partner info
     const partner = Object.values(otherUsers).find(u => u.status === 'stats');
 
     const calculateStats = (searchTerm) => {
         if (!searchTerm.trim()) return;
         if (!fullHistory) return;
-
         let countP1 = 0;
         let countP2 = 0;
-
-        // Normalize search
         const term = searchTerm.toLowerCase().trim();
-
+        const byPlatform = {};
         fullHistory.forEach(msg => {
-            // We use a simple check. If you want exact words only, we'd need Regex.
-            // "Includes" allows finding "love" inside "loveyou" or "loved", which is usually better.
-            // We count OCCURRENCES (so "haha haha" counts as 1 message usually, but let's count mentions)
-
             const text = msg.text;
             if (text.includes(term)) {
-                // Simple occurrence check (1 per message to avoid skewing data with spam)
                 if (msg.speaker === 'p1') countP1++;
                 else countP2++;
+                const p = msg.platform || 'unknown';
+                byPlatform[p] = (byPlatform[p] || 0) + 1;
             }
         });
-
-        setStats({ p1: countP1, p2: countP2, term });
+        setStats({ p1: countP1, p2: countP2, term, byPlatform });
     };
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        calculateStats(query);
-    };
+    const handleSearch = (e) => { e.preventDefault(); calculateStats(query); };
 
     const handleRandom = () => {
         const randomWord = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
@@ -81,116 +69,241 @@ export default function StatsBattle({ otherUsers = {} }) {
     if (isLoading) {
         return (
             <div className="w-full max-w-4xl flex flex-col items-center justify-center min-h-[500px]">
-                <div className="text-[var(--main-color)] text-xl animate-pulse">Loading stats...</div>
+                <div style={{ color: 'var(--main-color)', fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 18 }}>Loading stats...</div>
             </div>
         );
     }
 
     return (
-        <div className="w-full max-w-4xl flex flex-col items-center min-h-[500px] h-full">
-            {/* Partner presence indicator */}
+        <div style={{
+            width: '100%', maxWidth: 'var(--width-content)', margin: '0 auto',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            minHeight: 500, padding: '0 20px 80px',
+            fontFamily: 'var(--font-body)',
+        }}>
             {partner && (
-                <div className="flex items-center gap-2 text-sm mb-4">
-                    <div
-                        className="w-2 h-2 rounded-full animate-pulse"
-                        style={{ backgroundColor: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}
-                    />
-                    <span style={{ color: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}>
-                        {partner.role === 'princess' ? 'She' : 'He'}'s comparing stats too! 📊
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    fontSize: 14, color: 'var(--text-dim)', marginBottom: 18,
+                    fontFamily: 'var(--font-handwritten)',
+                }}>
+                    <div className="animate-pulse" style={{
+                        width: 7, height: 7, borderRadius: '50%',
+                        backgroundColor: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)',
+                    }} />
+                    <span style={{ color: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)' }}>
+                        {partner.role === 'princess' ? 'She' : 'He'}'s comparing stats too!
                     </span>
                 </div>
             )}
 
-            {/* SEARCH BAR */}
-            <div className="w-full max-w-xl mb-12 relative z-10 mt-8 flex flex-col gap-4">
-                <form onSubmit={handleSearch} className="w-full relative">
+            {/* Search */}
+            <div style={{ width: '100%', maxWidth: 560, marginBottom: 44, marginTop: 28 }}>
+                <form onSubmit={handleSearch} style={{ width: '100%', position: 'relative' }}>
                     <input
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="compare a word (e.g. 'sorry')..."
-                        className="w-full bg-[rgba(0,0,0,0.1)] border-2 border-[var(--sub-color)] text-[var(--text-color)] px-6 py-4 rounded-full text-xl outline-none focus:border-[var(--main-color)] transition-colors placeholder-[var(--sub-color)] focus:bg-[var(--bg-color)]"
+                        style={{
+                            width: '100%', padding: '16px 110px 16px 20px',
+                            border: 'none', borderBottom: '2px solid var(--sub-color)',
+                            background: 'transparent', color: 'var(--text-color)',
+                            fontSize: 20, outline: 'none',
+                            fontFamily: 'var(--font-mono)',
+                            transition: 'border-color 0.2s',
+                        }}
                         autoFocus
                     />
                     <button
                         type="submit"
-                        className="absolute right-3 top-2 bottom-2 px-6 bg-[var(--sub-color)] hover:bg-[var(--main-color)] text-[var(--bg-color)] font-bold rounded-full transition-colors"
+                        style={{
+                            position: 'absolute', right: 4, top: 8, bottom: 8,
+                            padding: '0 24px', background: 'var(--sub-color)', color: 'var(--bg-color)',
+                            border: 'none', borderRadius: 'var(--radius-card)', cursor: 'pointer',
+                            fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 600,
+                            textTransform: 'uppercase', letterSpacing: '0.05em',
+                        }}
                     >
                         Fight
                     </button>
                 </form>
                 <button
                     onClick={handleRandom}
-                    className="self-center text-[var(--sub-color)] text-sm hover:text-[var(--main-color)] transition flex items-center gap-2"
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        margin: '14px auto 0', background: 'none', border: 'none',
+                        color: 'var(--sub-color)', fontSize: 15, cursor: 'pointer',
+                        fontFamily: 'var(--font-handwritten)', fontWeight: 400,
+                        transition: 'color 0.2s',
+                    }}
                 >
-                    🎲 Try a random common word
+                    Try a random common word
                 </button>
             </div>
 
-            {/* BATTLE ARENA */}
+            {/* Battle arena */}
             {stats && (
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="w-full max-w-2xl bg-[rgba(0,0,0,0.05)] rounded-3xl p-8 border border-[var(--sub-color)] border-opacity-20"
+                    style={{
+                        width: '100%', maxWidth: 640,
+                        padding: 'clamp(16px, 4vw, 36px)', borderRadius: 'var(--radius-card)',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        boxShadow: '0 3px 12px var(--shadow-color)',
+                        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 23px, var(--border-color) 23px, var(--border-color) 24px), repeating-linear-gradient(90deg, transparent, transparent 23px, var(--border-color) 23px, var(--border-color) 24px)',
+                        backgroundSize: '24px 24px',
+                    }}
                 >
-                    <div className="text-center mb-10">
-                        <div className="text-[var(--sub-color)] uppercase tracking-widest text-xs font-bold mb-2">Verdict</div>
-                        <h2 className="text-4xl font-bold text-[var(--text-color)]">
-                            Who says "<span className="text-[var(--main-color)]">{stats.term}</span>" more?
+                    <div style={{ textAlign: 'center', marginBottom: 36 }}>
+                        <div style={{
+                            fontSize: 13, color: 'var(--text-dim-card)', textTransform: 'uppercase',
+                            letterSpacing: '0.14em', fontWeight: 400, marginBottom: 10,
+                            fontFamily: 'var(--font-mono)',
+                        }}>
+                            Verdict
+                        </div>
+                        <h2 style={{
+                            fontFamily: 'var(--font-display)', fontSize: 'clamp(20px, 4vw, 28px)', fontWeight: 400,
+                            color: 'var(--text-on-card)', margin: 0, fontStyle: 'italic',
+                            wordBreak: 'break-word',
+                        }}>
+                            Who says "<span style={{ color: 'var(--main-color)' }}>{stats.term}</span>" more?
                         </h2>
                     </div>
 
                     {getTotal() === 0 ? (
-                        <div className="text-center text-[var(--sub-color)] opacity-50">
+                        <div style={{
+                            textAlign: 'center', color: 'var(--text-dim-card)',
+                            fontFamily: 'var(--font-handwritten)', fontSize: 18,
+                        }}>
                             Neither of you have said this word yet!
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-8">
-                            {/* PLAYER 1 BAR */}
-                            <div className="flex flex-col gap-2">
-                                <div className="flex justify-between text-xl font-bold px-2">
-                                    <span className="text-[var(--main-color)]">{formatName('p1')}</span>
-                                    <span className="text-[var(--text-color)]">{stats.p1} times</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(20px, 4vw, 32px)' }}>
+                            {/* Player 1 bar */}
+                            <div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px 8px', marginBottom: 8, padding: '0 4px' }}>
+                                    <span style={{
+                                        color: 'var(--main-color)', fontWeight: 400, fontSize: 18,
+                                        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                                    }}>{formatName('p1')}</span>
+                                    <span style={{
+                                        color: 'var(--text-on-card)', fontWeight: 600, fontSize: 16,
+                                        fontFamily: 'var(--font-mono)',
+                                    }}>{stats.p1} times</span>
                                 </div>
-                                <div className="w-full h-12 bg-[var(--bg-color)] rounded-full overflow-hidden border border-[var(--sub-color)] border-opacity-30 relative">
+                                <div style={{
+                                    width: '100%', height: 40,
+                                    background: 'var(--bg-secondary)',
+                                    borderRadius: 'var(--radius-card)',
+                                    overflow: 'hidden',
+                                    border: '1px solid var(--border-color)',
+                                    position: 'relative',
+                                }}>
                                     <motion.div
                                         initial={{ width: 0 }}
                                         animate={{ width: `${getPercent(stats.p1)}%` }}
                                         transition={{ duration: 1, type: "spring" }}
-                                        className="h-full bg-[var(--main-color)]"
+                                        style={{
+                                            height: '100%', background: 'var(--main-color)',
+                                            borderRadius: 'var(--radius-card)',
+                                        }}
                                     />
-                                    <span className="absolute inset-0 flex items-center ml-4 text-[var(--bg-color)] font-bold opacity-80">{getPercent(stats.p1)}%</span>
+                                    <span style={{
+                                        position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+                                        color: 'var(--bg-color)', fontWeight: 700, fontSize: 14,
+                                        fontFamily: 'var(--font-mono)',
+                                    }}>{getPercent(stats.p1)}%</span>
                                 </div>
                             </div>
 
-                            {/* PLAYER 2 BAR */}
-                            <div className="flex flex-col gap-2">
-                                <div className="flex justify-between text-xl font-bold px-2">
-                                    <span className="text-[var(--sub-color)]">{formatName('p2')}</span>
-                                    <span className="text-[var(--text-color)]">{stats.p2} times</span>
+                            {/* Player 2 bar */}
+                            <div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px 8px', marginBottom: 8, padding: '0 4px' }}>
+                                    <span style={{
+                                        color: 'var(--sub-color)', fontWeight: 400, fontSize: 18,
+                                        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                                    }}>{formatName('p2')}</span>
+                                    <span style={{
+                                        color: 'var(--text-on-card)', fontWeight: 600, fontSize: 16,
+                                        fontFamily: 'var(--font-mono)',
+                                    }}>{stats.p2} times</span>
                                 </div>
-                                <div className="w-full h-12 bg-[var(--bg-color)] rounded-full overflow-hidden border border-[var(--sub-color)] border-opacity-30 relative">
+                                <div style={{
+                                    width: '100%', height: 40,
+                                    background: 'var(--bg-secondary)',
+                                    borderRadius: 'var(--radius-card)',
+                                    overflow: 'hidden',
+                                    border: '1px solid var(--border-color)',
+                                    position: 'relative',
+                                }}>
                                     <motion.div
                                         initial={{ width: 0 }}
                                         animate={{ width: `${getPercent(stats.p2)}%` }}
                                         transition={{ duration: 1, type: "spring" }}
-                                        className="h-full bg-[var(--sub-color)]"
+                                        style={{
+                                            height: '100%', background: 'var(--sub-color)',
+                                            borderRadius: 'var(--radius-card)',
+                                        }}
                                     />
-                                    <span className="absolute inset-0 flex items-center ml-4 text-[var(--bg-color)] font-bold opacity-80">{getPercent(stats.p2)}%</span>
+                                    <span style={{
+                                        position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+                                        color: 'var(--bg-color)', fontWeight: 700, fontSize: 14,
+                                        fontFamily: 'var(--font-mono)',
+                                    }}>{getPercent(stats.p2)}%</span>
                                 </div>
                             </div>
 
-                            {/* WINNER MESSAGE */}
-                            <div className="text-center mt-6 text-lg font-bold">
+                            {/* Winner */}
+                            <div style={{ textAlign: 'center', marginTop: 14 }}>
                                 {stats.p1 > stats.p2 ? (
-                                    <span>🏆 {formatName('p1')} wins the <span className="text-[var(--main-color)]">{stats.term}</span> war!</span>
+                                    <span className="animate-stamp-press" style={{
+                                        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                                        fontSize: 22, fontWeight: 400, color: 'var(--main-color)',
+                                    }}>
+                                        {formatName('p1')} wins the "{stats.term}" war!
+                                    </span>
                                 ) : stats.p2 > stats.p1 ? (
-                                    <span>🏆 {formatName('p2')} wins the <span className="text-[var(--main-color)]">{stats.term}</span> war!</span>
+                                    <span className="animate-stamp-press" style={{
+                                        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                                        fontSize: 22, fontWeight: 400, color: 'var(--sub-color)',
+                                    }}>
+                                        {formatName('p2')} wins the "{stats.term}" war!
+                                    </span>
                                 ) : (
-                                    <span>It's a tie! Soulmates fr.</span>
+                                    <span style={{
+                                        fontFamily: 'var(--font-handwritten)', fontSize: 22,
+                                        color: 'var(--text-on-card)',
+                                    }}>
+                                        It's a tie! Soulmates fr.
+                                    </span>
                                 )}
                             </div>
+
+                            {/* Platform breakdown */}
+                            {stats.byPlatform && Object.keys(stats.byPlatform).length > 0 && (
+                                <div style={{
+                                    display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center',
+                                    marginTop: 20, paddingTop: 16,
+                                    borderTop: '1px solid var(--border-color)',
+                                }}>
+                                    {Object.entries(stats.byPlatform)
+                                        .sort((a, b) => b[1] - a[1])
+                                        .map(([platform, count]) => (
+                                        <div key={platform} style={{
+                                            display: 'flex', alignItems: 'center', gap: 5,
+                                            fontSize: 13, fontFamily: 'var(--font-mono)',
+                                            color: PLATFORMS[platform]?.color || 'var(--sub-color)',
+                                        }}>
+                                            <PlatformIcon platform={platform} size={13} />
+                                            <span>{count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </motion.div>

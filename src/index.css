@@ -2,64 +2,1598 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME SYSTEM — "haizur archives"
+   Warm Mahogany — dark wood table, polaroid memories, golden lamplight
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* Default (Serika Dark) */
-  --bg-color: #323437;
-  --main-color: #e2b714;
-  --caret-color: #e2b714;
-  --sub-color: #646669;
-  --text-color: #d1d0c5;
-  --error-color: #ca4754;
+  /* Warm Mahogany (Default) — dark wood, golden amber, cream polaroids */
+  --bg-color: #1c1410;
+  --bg-secondary: #241a14;
+  --bg-tertiary: #2e211a;
+  --bg-card: rgba(46, 33, 26, 0.85);
+  --bg-card-hover: rgba(56, 40, 30, 0.9);
+  --bg-card-alt: rgba(62, 45, 34, 0.85);
+  --main-color: #d4a054;
+  --main-color-dim: rgba(212, 160, 84, 0.15);
+  --accent-color: #c4724a;
+  --caret-color: #d4a054;
+  --sub-color: #4a3828;
+  --sub-color-light: #6b5842;
+  --text-color: #f0e8d8;
+  --text-dim: #a89278;
+  --text-on-card: #f0e8d8;
+  --text-dim-card: #a89278;
+  --error-color: #e05555;
+  --success-color: #5cb870;
+  --warning-color: #e0a030;
+  --border-color: rgba(212, 160, 84, 0.12);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(28, 20, 16, 0.95);
+  --glass-border: rgba(212, 160, 84, 0.08);
+  --gradient-primary: linear-gradient(135deg, #d4a054 0%, #c4724a 100%);
+  --gradient-hero: linear-gradient(180deg, #1c1410 0%, #241a14 40%, #1c1410 100%);
+  --gradient-card: linear-gradient(145deg, rgba(46, 33, 26, 0.9), rgba(36, 26, 20, 0.95));
+  --bubble-self: #d4a054;
+  --bubble-self-text: #1c1410;
+  --bubble-other: #2e211a;
+  --bubble-other-text: #f0e8d8;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+
+  /* Typography */
+  --font-display: 'DM Serif Display', 'Georgia', serif;
+  --font-body: 'Outfit', -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --font-handwritten: 'Kalam', cursive;
+
+  /* Sizing */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  --radius-card: 6px;
+  --radius-card-lg: 10px;
+  --grain-opacity: 0.06;
+
+  /* Layout */
+  --width-home: 1120px;
+  --width-content: 960px;
+  --width-narrow: 760px;
+  --accent-strip-height: 3px;
+
+  /* Vintage Scrapbook */
+  --honey-color: #d4a054;
+  --honey-dim: rgba(212, 160, 84, 0.12);
+  --shadow-warm: rgba(212, 160, 84, 0.08);
+  --partner-princess: #c4724a;
+  --partner-prince: #d4a054;
+  --gradient-princess: linear-gradient(135deg, #c4724a, #a85a3a);
+  --gradient-prince: linear-gradient(135deg, #d4a054, #b8883e);
+
+  /* Vintage-specific */
+  --tape-color: rgba(212, 180, 120, 0.55);
+  --tape-color-alt: rgba(180, 150, 100, 0.4);
+  --paper-edge-color: #3a2c20;
+  --wax-seal-color: #c4724a;
+  --film-border-color: #d4a054;
+  --ink-color: #f0e8d8;
+  --thread-color: #c4724a;
+  --stamp-color: rgba(212, 160, 84, 0.5);
 }
 
+/* Milk Tea (Parchment) — aged parchment, burgundy accent */
+[data-theme='milktea'] {
+  --bg-color: #f0e6d3;
+  --bg-secondary: #e8dcc6;
+  --bg-tertiary: #ddd0bc;
+  --bg-card: #f5edd9;
+  --bg-card-hover: #f2e8d0;
+  --bg-card-alt: #ede3cf;
+  --main-color: #6b2c3a;
+  --main-color-dim: rgba(107, 44, 58, 0.12);
+  --accent-color: #8b3a4a;
+  --caret-color: #6b2c3a;
+  --sub-color: #c4a882;
+  --sub-color-light: #9a8468;
+  --text-color: #3a2d1d;
+  --text-dim: #7a6548;
+  --text-on-card: #3a2d1d;
+  --text-dim-card: #7a6548;
+  --error-color: #a83232;
+  --success-color: #4a8c5a;
+  --border-color: rgba(107, 44, 58, 0.15);
+  --shadow-color: rgba(58, 45, 29, 0.12);
+  --glass-bg: rgba(240, 230, 211, 0.92);
+  --glass-border: rgba(107, 44, 58, 0.10);
+  --gradient-primary: linear-gradient(135deg, #6b2c3a 0%, #8b3a4a 100%);
+  --gradient-hero: linear-gradient(180deg, #f0e6d3 0%, #e8dcc6 35%, #ede3cf 60%, #f0e6d3 100%);
+  --gradient-card: linear-gradient(145deg, rgba(245, 237, 217, 0.95) 0%, rgba(240, 230, 211, 0.98) 100%);
+  --bubble-self: #6b2c3a;
+  --bubble-self-text: #f5edd9;
+  --bubble-other: #e8dcc6;
+  --bubble-other-text: #3a2d1d;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #c4a35a;
+  --honey-dim: rgba(196, 163, 90, 0.12);
+  --shadow-warm: rgba(107, 44, 58, 0.08);
+  --partner-princess: #8b3a4a;
+  --partner-prince: #c4a35a;
+  --gradient-princess: linear-gradient(135deg, #8b3a4a, #6b2c3a);
+  --gradient-prince: linear-gradient(135deg, #c4a35a, #a8883e);
+  --tape-color: rgba(232, 212, 162, 0.7);
+  --tape-color-alt: rgba(180, 160, 120, 0.5);
+  --paper-edge-color: #d4c4a8;
+  --wax-seal-color: #6b2c3a;
+  --film-border-color: #3a2d1d;
+  --ink-color: #3a2d1d;
+  --thread-color: #8b3a4a;
+  --stamp-color: rgba(107, 44, 58, 0.6);
+}
+
+/* Cherry Blossom Diary (Romantic) — soft pink parchment, rose ink */
+[data-theme='romantic'] {
+  --bg-color: #f5e4e8;
+  --bg-secondary: #eddad0;
+  --bg-tertiary: #e6d0c8;
+  --bg-card: #faf0f2;
+  --bg-card-hover: #f5e8eb;
+  --main-color: #8c3a52;
+  --main-color-dim: rgba(140, 58, 82, 0.12);
+  --accent-color: #a84466;
+  --caret-color: #8c3a52;
+  --sub-color: #d4a8b4;
+  --sub-color-light: #b08090;
+  --text-color: #3d202a;
+  --text-dim: #8a5a68;
+  --text-on-card: #3d202a;
+  --text-dim-card: #8a5a68;
+  --error-color: #a83240;
+  --success-color: #4a8c5a;
+  --border-color: rgba(140, 58, 82, 0.15);
+  --shadow-color: rgba(140, 58, 82, 0.10);
+  --glass-bg: rgba(245, 228, 232, 0.92);
+  --glass-border: rgba(140, 58, 82, 0.08);
+  --gradient-primary: linear-gradient(135deg, #8c3a52 0%, #a84466 100%);
+  --gradient-hero: linear-gradient(180deg, #f5e4e8 0%, #eddad0 35%, #f2e0e4 60%, #f5e4e8 100%);
+  --gradient-card: linear-gradient(145deg, rgba(250, 240, 242, 0.95) 0%, rgba(245, 228, 232, 0.98) 100%);
+  --bubble-self: #8c3a52;
+  --bubble-self-text: #faf0f2;
+  --bubble-other: #eddad0;
+  --bubble-other-text: #3d202a;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #c4a060;
+  --honey-dim: rgba(196, 160, 96, 0.12);
+  --shadow-warm: rgba(140, 58, 82, 0.08);
+  --partner-princess: #a84466;
+  --partner-prince: #c4a060;
+  --gradient-princess: linear-gradient(135deg, #a84466, #8c3a52);
+  --gradient-prince: linear-gradient(135deg, #c4a060, #a88840);
+  --tape-color: rgba(240, 200, 210, 0.7);
+  --tape-color-alt: rgba(200, 170, 180, 0.5);
+  --paper-edge-color: #dcc8cc;
+  --wax-seal-color: #8c3a52;
+  --thread-color: #a84466;
+  --stamp-color: rgba(140, 58, 82, 0.6);
+}
+
+/* Midnight Correspondence (Night) — dark parchment, lavender ink */
+[data-theme='night'] {
+  --bg-color: #1e1c28;
+  --bg-secondary: #262435;
+  --bg-tertiary: #2e2c3e;
+  --bg-card: #2a2838;
+  --bg-card-hover: #322f44;
+  --main-color: #b8a0d0;
+  --main-color-dim: rgba(184, 160, 208, 0.12);
+  --accent-color: #9880b8;
+  --caret-color: #b8a0d0;
+  --sub-color: #3d3a50;
+  --sub-color-light: #5c5878;
+  --text-color: #e4ddf0;
+  --text-dim: #8a84a4;
+  --text-on-card: #e4ddf0;
+  --text-dim-card: #8a84a4;
+  --error-color: #c05060;
+  --success-color: #5cb870;
+  --border-color: rgba(184, 160, 208, 0.10);
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --glass-bg: rgba(30, 28, 40, 0.95);
+  --glass-border: rgba(184, 160, 208, 0.06);
+  --gradient-primary: linear-gradient(135deg, #b8a0d0 0%, #9880b8 100%);
+  --gradient-hero: linear-gradient(180deg, #1e1c28 0%, #262435 35%, #222030 60%, #1e1c28 100%);
+  --gradient-card: linear-gradient(145deg, rgba(42, 40, 56, 0.95) 0%, rgba(30, 28, 40, 0.98) 100%);
+  --bubble-self: #b8a0d0;
+  --bubble-self-text: #1e1c28;
+  --bubble-other: #322f44;
+  --bubble-other-text: #e4ddf0;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #c4a060;
+  --honey-dim: rgba(196, 160, 96, 0.10);
+  --shadow-warm: rgba(184, 160, 208, 0.06);
+  --partner-princess: #c0a0d8;
+  --partner-prince: #a098c0;
+  --gradient-princess: linear-gradient(135deg, #c0a0d8, #9880b8);
+  --gradient-prince: linear-gradient(135deg, #a098c0, #8078a8);
+  --tape-color: rgba(60, 55, 80, 0.7);
+  --tape-color-alt: rgba(50, 46, 68, 0.5);
+  --paper-edge-color: #3d3a50;
+  --wax-seal-color: #b8a0d0;
+  --film-border-color: #e4ddf0;
+  --thread-color: #9880b8;
+  --stamp-color: rgba(184, 160, 208, 0.5);
+}
+
+/* Terminal / Matrix */
 [data-theme='matrix'] {
   --bg-color: #000000;
-  --main-color: #00ff00;
-  --caret-color: #00ff00;
-  --sub-color: #003b00;
-  --text-color: #008f11;
-  --error-color: #da3333;
+  --bg-secondary: #080808;
+  --bg-tertiary: #101010;
+  --bg-card: #0f0f0f;
+  --bg-card-hover: #181818;
+  --main-color: #00e050;
+  --main-color-dim: rgba(0, 224, 80, 0.08);
+  --accent-color: #00b840;
+  --caret-color: #00e050;
+  --sub-color: #1a2a1a;
+  --sub-color-light: #2a442a;
+  --text-color: #00cc44;
+  --text-dim: #007a2a;
+  --text-on-card: #00cc44;
+  --text-dim-card: #007a2a;
+  --error-color: #cc2020;
+  --success-color: #00e050;
+  --border-color: rgba(0, 224, 80, 0.06);
+  --shadow-color: rgba(0, 0, 0, 0.9);
+  --glass-bg: rgba(0, 0, 0, 0.95);
+  --glass-border: rgba(0, 224, 80, 0.04);
+  --gradient-primary: linear-gradient(135deg, #00e050 0%, #00b840 100%);
+  --gradient-hero: linear-gradient(180deg, #000000 0%, #040804 35%, #081008 60%, #000000 100%);
+  --gradient-card: linear-gradient(145deg, rgba(15, 15, 15, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%);
+  --bubble-self: #00e050;
+  --bubble-self-text: #000000;
+  --bubble-other: #0a1a0a;
+  --bubble-other-text: #00cc44;
+  --font-display: 'JetBrains Mono', monospace;
+  --font-body: 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-handwritten: 'JetBrains Mono', monospace;
+  --grain-opacity: 0.06;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #00aa30;
+  --honey-dim: rgba(0, 170, 48, 0.08);
+  --shadow-warm: rgba(0, 224, 80, 0.04);
+  --partner-princess: #00e050;
+  --partner-prince: #00b840;
+  --gradient-princess: linear-gradient(135deg, #00e050, #00b840);
+  --gradient-prince: linear-gradient(135deg, #00b840, #009030);
+  --tape-color: rgba(0, 224, 80, 0.15);
+  --tape-color-alt: rgba(0, 180, 60, 0.10);
+  --paper-edge-color: #1a2a1a;
+  --wax-seal-color: #00e050;
+  --film-border-color: #00cc44;
+  --thread-color: #00b840;
+  --stamp-color: rgba(0, 224, 80, 0.4);
 }
 
-/* LOVE THEME: Dark Pink Mode */
-[data-theme='love'] {
-  --bg-color: #231e20;       /* Dark Chocolate/Black base */
-  --main-color: #ff69b4;     /* Hot Pink for active stuff */
+/* Pinky Cute 🎀 — Kawaii pastel pink, soft and adorable */
+[data-theme='pinky'] {
+  --bg-color: #fff0f5;
+  --bg-secondary: #ffe4ee;
+  --bg-tertiary: #ffd6e6;
+  --bg-card: #fff5f9;
+  --bg-card-hover: #ffebf3;
+  --bg-card-alt: #ffdde9;
+  --main-color: #ff69b4;
+  --main-color-dim: rgba(255, 105, 180, 0.12);
+  --accent-color: #ff1493;
   --caret-color: #ff69b4;
-  --sub-color: #946579;      /* Muted Mauve for ignored text */
-  --text-color: #ffe6f2;     /* Pale Sakura White for text */
-  --error-color: #ff0033;
+  --sub-color: #f0b8d0;
+  --sub-color-light: #d48aaa;
+  --text-color: #4a0028;
+  --text-dim: #8a4060;
+  --text-on-card: #4a0028;
+  --text-dim-card: #8a4060;
+  --error-color: #e03060;
+  --success-color: #50b878;
+  --warning-color: #e0a030;
+  --border-color: rgba(255, 105, 180, 0.18);
+  --shadow-color: rgba(255, 105, 180, 0.10);
+  --glass-bg: rgba(255, 240, 245, 0.95);
+  --glass-border: rgba(255, 105, 180, 0.10);
+  --gradient-primary: linear-gradient(135deg, #ff69b4 0%, #ff1493 100%);
+  --gradient-hero: linear-gradient(180deg, #fff0f5 0%, #ffe4ee 35%, #fff0f5 100%);
+  --gradient-card: linear-gradient(145deg, rgba(255, 245, 249, 0.95), rgba(255, 240, 245, 0.98));
+  --bubble-self: #ff69b4;
+  --bubble-self-text: #fff;
+  --bubble-other: #ffe4ee;
+  --bubble-other-text: #4a0028;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #ff85c0;
+  --honey-dim: rgba(255, 133, 192, 0.10);
+  --shadow-warm: rgba(255, 105, 180, 0.08);
+  --partner-princess: #ff1493;
+  --partner-prince: #ff69b4;
+  --gradient-princess: linear-gradient(135deg, #ff1493, #ff69b4);
+  --gradient-prince: linear-gradient(135deg, #ff69b4, #ff85c0);
+  --tape-color: rgba(255, 182, 215, 0.65);
+  --tape-color-alt: rgba(255, 160, 200, 0.45);
+  --paper-edge-color: #ffc8de;
+  --wax-seal-color: #ff69b4;
+  --film-border-color: #4a0028;
+  --ink-color: #4a0028;
+  --thread-color: #ff1493;
+  --stamp-color: rgba(255, 105, 180, 0.5);
+  --font-display: 'DM Serif Display', 'Georgia', serif;
+  --font-handwritten: 'Kalam', cursive;
+}
+
+/* Ocean Breeze 🌊 — Deep navy, teal accents, foam white */
+[data-theme='ocean'] {
+  --bg-color: #0a1628;
+  --bg-secondary: #0f1e35;
+  --bg-tertiary: #142640;
+  --bg-card: rgba(20, 38, 64, 0.90);
+  --bg-card-hover: rgba(25, 45, 72, 0.92);
+  --bg-card-alt: rgba(24, 42, 68, 0.88);
+  --main-color: #40c0c0;
+  --main-color-dim: rgba(64, 192, 192, 0.12);
+  --accent-color: #2090b0;
+  --caret-color: #40c0c0;
+  --sub-color: #1e3a50;
+  --sub-color-light: #2e5570;
+  --text-color: #e0f0f4;
+  --text-dim: #6a98b0;
+  --text-on-card: #e0f0f4;
+  --text-dim-card: #6a98b0;
+  --error-color: #e05555;
+  --success-color: #40d0a0;
+  --warning-color: #e0b040;
+  --border-color: rgba(64, 192, 192, 0.10);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(10, 22, 40, 0.95);
+  --glass-border: rgba(64, 192, 192, 0.06);
+  --gradient-primary: linear-gradient(135deg, #40c0c0 0%, #2090b0 100%);
+  --gradient-hero: linear-gradient(180deg, #0a1628 0%, #0f1e35 40%, #0a1628 100%);
+  --gradient-card: linear-gradient(145deg, rgba(20, 38, 64, 0.95), rgba(10, 22, 40, 0.98));
+  --bubble-self: #40c0c0;
+  --bubble-self-text: #0a1628;
+  --bubble-other: #142640;
+  --bubble-other-text: #e0f0f4;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #40c0c0;
+  --honey-dim: rgba(64, 192, 192, 0.08);
+  --shadow-warm: rgba(64, 192, 192, 0.06);
+  --partner-princess: #60d0d0;
+  --partner-prince: #2090b0;
+  --gradient-princess: linear-gradient(135deg, #60d0d0, #40c0c0);
+  --gradient-prince: linear-gradient(135deg, #2090b0, #1878a0);
+  --tape-color: rgba(64, 192, 192, 0.25);
+  --tape-color-alt: rgba(40, 160, 180, 0.18);
+  --paper-edge-color: #1e3a50;
+  --wax-seal-color: #40c0c0;
+  --film-border-color: #e0f0f4;
+  --ink-color: #e0f0f4;
+  --thread-color: #2090b0;
+  --stamp-color: rgba(64, 192, 192, 0.4);
+}
+
+/* Sunset Diary 🌅 — Warm orange fading to purple */
+[data-theme='sunset'] {
+  --bg-color: #1a0e18;
+  --bg-secondary: #241420;
+  --bg-tertiary: #301828;
+  --bg-card: rgba(48, 24, 40, 0.88);
+  --bg-card-hover: rgba(56, 30, 48, 0.92);
+  --bg-card-alt: rgba(52, 28, 44, 0.88);
+  --main-color: #f08050;
+  --main-color-dim: rgba(240, 128, 80, 0.12);
+  --accent-color: #c05088;
+  --caret-color: #f08050;
+  --sub-color: #3a2030;
+  --sub-color-light: #5a3848;
+  --text-color: #f4e0e8;
+  --text-dim: #a07080;
+  --text-on-card: #f4e0e8;
+  --text-dim-card: #a07080;
+  --error-color: #e05050;
+  --success-color: #5cb870;
+  --warning-color: #e0a040;
+  --border-color: rgba(240, 128, 80, 0.10);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(26, 14, 24, 0.95);
+  --glass-border: rgba(240, 128, 80, 0.06);
+  --gradient-primary: linear-gradient(135deg, #f08050 0%, #c05088 100%);
+  --gradient-hero: linear-gradient(180deg, #1a0e18 0%, #241420 35%, #1a0e18 100%);
+  --gradient-card: linear-gradient(145deg, rgba(48, 24, 40, 0.95), rgba(26, 14, 24, 0.98));
+  --bubble-self: #f08050;
+  --bubble-self-text: #1a0e18;
+  --bubble-other: #301828;
+  --bubble-other-text: #f4e0e8;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #f09070;
+  --honey-dim: rgba(240, 144, 112, 0.08);
+  --shadow-warm: rgba(240, 128, 80, 0.06);
+  --partner-princess: #c05088;
+  --partner-prince: #f08050;
+  --gradient-princess: linear-gradient(135deg, #c05088, #a04070);
+  --gradient-prince: linear-gradient(135deg, #f08050, #d06840);
+  --tape-color: rgba(240, 128, 80, 0.25);
+  --tape-color-alt: rgba(192, 80, 136, 0.18);
+  --paper-edge-color: #3a2030;
+  --wax-seal-color: #c05088;
+  --film-border-color: #f4e0e8;
+  --ink-color: #f4e0e8;
+  --thread-color: #f08050;
+  --stamp-color: rgba(240, 128, 80, 0.4);
+}
+
+/* Coffee Journal ☕ — Rich brown, cream paper, warm earth tones */
+[data-theme='coffee'] {
+  --bg-color: #f5efe6;
+  --bg-secondary: #ebe3d6;
+  --bg-tertiary: #e0d6c8;
+  --bg-card: #f8f2e8;
+  --bg-card-hover: #f2ead9;
+  --bg-card-alt: #ede5d4;
+  --main-color: #6b4226;
+  --main-color-dim: rgba(107, 66, 38, 0.10);
+  --accent-color: #8b5a3a;
+  --caret-color: #6b4226;
+  --sub-color: #c4b098;
+  --sub-color-light: #9a8268;
+  --text-color: #2c1a0e;
+  --text-dim: #6a5040;
+  --text-on-card: #2c1a0e;
+  --text-dim-card: #6a5040;
+  --error-color: #a03030;
+  --success-color: #4a7a4a;
+  --warning-color: #c08020;
+  --border-color: rgba(107, 66, 38, 0.12);
+  --shadow-color: rgba(44, 26, 14, 0.10);
+  --glass-bg: rgba(245, 239, 230, 0.95);
+  --glass-border: rgba(107, 66, 38, 0.08);
+  --gradient-primary: linear-gradient(135deg, #6b4226 0%, #8b5a3a 100%);
+  --gradient-hero: linear-gradient(180deg, #f5efe6 0%, #ebe3d6 35%, #f5efe6 100%);
+  --gradient-card: linear-gradient(145deg, rgba(248, 242, 232, 0.95), rgba(245, 239, 230, 0.98));
+  --bubble-self: #6b4226;
+  --bubble-self-text: #f8f2e8;
+  --bubble-other: #ebe3d6;
+  --bubble-other-text: #2c1a0e;
+  --platform-whatsapp: #25d366;
+  --platform-instagram: #e1306c;
+  --platform-tiktok: #00c9c0;
+  --platform-imessage: #34aadc;
+  --platform-discord: #7289da;
+  --honey-color: #a07840;
+  --honey-dim: rgba(160, 120, 64, 0.08);
+  --shadow-warm: rgba(107, 66, 38, 0.06);
+  --partner-princess: #8b5a3a;
+  --partner-prince: #a07840;
+  --gradient-princess: linear-gradient(135deg, #8b5a3a, #6b4226);
+  --gradient-prince: linear-gradient(135deg, #a07840, #886630);
+  --tape-color: rgba(200, 180, 140, 0.65);
+  --tape-color-alt: rgba(180, 160, 120, 0.45);
+  --paper-edge-color: #d4c4a8;
+  --wax-seal-color: #6b4226;
+  --film-border-color: #2c1a0e;
+  --ink-color: #2c1a0e;
+  --thread-color: #8b5a3a;
+  --stamp-color: rgba(107, 66, 38, 0.5);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background-color: var(--bg-color);
+  background: var(--bg-color);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(212, 160, 84, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(196, 114, 74, 0.03) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 80%, rgba(212, 160, 84, 0.02) 0%, transparent 45%);
+  background-attachment: fixed;
   color: var(--text-color);
-  font-family: 'Roboto Mono', monospace;
+  font-family: var(--font-body);
+  font-size: 16px;
   margin: 0;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  transition: background-color 0.5s ease, color 0.5s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--main-color);
+  color: var(--bg-color);
+}
+
+.emoji-text {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRAIN TEXTURE OVERLAY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 512px 512px;
+  contain: strict;
+}
+
+.paper-fibers,
+.dot-texture {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='fibers'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.02 0.08' numOctaves='3' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23fibers)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 400px 400px;
+  contain: strict;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VINTAGE REUSABLE COMPONENTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.polaroid-card {
+  background: var(--bg-card);
+  border: 4px solid rgba(212, 160, 84, 0.08);
+  border-bottom-width: 36px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: visible;
+}
+
+.polaroid-card::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  border-left: 2px solid var(--text-dim-card);
+  border-top: 2px solid var(--text-dim-card);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.polaroid-card::after {
+  content: '';
+  position: absolute;
+  bottom: 40px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid var(--text-dim-card);
+  border-bottom: 2px solid var(--text-dim-card);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* ─── Masking Tape Strips ─── */
+
+.tape-top {
+  position: relative;
+}
+
+.tape-top::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-1deg);
+  width: 64px;
+  height: 20px;
+  background: var(--tape-color);
+  border-radius: 1px;
+  z-index: 2;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tape-corner-left {
+  position: relative;
+}
+
+.tape-corner-left::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 44px;
+  height: 18px;
+  background: var(--tape-color-alt);
+  transform: rotate(-32deg);
+  border-radius: 1px;
+  z-index: 2;
+  opacity: 0.85;
+}
+
+.tape-corner-right {
+  position: relative;
+}
+
+.tape-corner-right::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 44px;
+  height: 18px;
+  background: var(--tape-color);
+  transform: rotate(28deg);
+  border-radius: 1px;
+  z-index: 2;
+  opacity: 0.85;
+}
+
+/* ─── Torn Paper Divider ─── */
+
+.torn-paper-divider {
+  position: relative;
+  height: 24px;
+  margin: 20px 0;
+  background: transparent;
+}
+
+.torn-paper-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 12px;
+  background: var(--paper-edge-color);
+  clip-path: polygon(0% 0%, 3% 60%, 6% 20%, 9% 70%, 12% 10%, 16% 80%, 19% 30%,
+      22% 90%, 25% 0%, 28% 60%, 32% 25%, 35% 85%, 38% 15%, 42% 70%,
+      45% 5%, 48% 55%, 52% 20%, 55% 75%, 58% 10%, 62% 65%, 65% 30%,
+      68% 80%, 72% 5%, 75% 60%, 78% 25%, 82% 75%, 85% 15%, 88% 65%,
+      92% 10%, 95% 55%, 98% 20%, 100% 0%, 100% 100%, 0% 100%);
+  opacity: 0.4;
+}
+
+/* ─── Section Divider ─── */
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-divider::before {
+  content: '';
+  width: 40px;
+  height: 1.5px;
+  background: linear-gradient(90deg, var(--main-color), transparent);
+  flex-shrink: 0;
+}
+
+.section-divider::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--wax-seal-color);
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--bg-color), 0 0 0 3px var(--wax-seal-color);
+}
+
+/* ─── Wax Seal ─── */
+
+.wax-seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--wax-seal-color), rgba(196, 114, 74, 0.8));
+  box-shadow:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(255, 255, 255, 0.15),
+    0 2px 8px rgba(196, 114, 74, 0.3),
+    0 0 24px rgba(212, 160, 84, 0.1);
+  color: var(--bg-card);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.wax-seal::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+/* ─── Film Strip ─── */
+
+.film-strip {
+  position: relative;
+  border-top: 3px solid var(--film-border-color);
+  border-bottom: 3px solid var(--film-border-color);
+}
+
+.film-strip::before,
+.film-strip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: repeating-linear-gradient(90deg,
+      transparent 0px,
+      transparent 6px,
+      var(--film-border-color) 6px,
+      var(--film-border-color) 10px,
+      transparent 10px,
+      transparent 16px);
+}
+
+.film-strip::before {
+  top: -6px;
+}
+
+.film-strip::after {
+  bottom: -6px;
+}
+
+/* ─── Handwritten Text ─── */
+
+.handwritten {
+  font-family: var(--font-handwritten);
+  font-weight: 400;
+}
+
+.handwritten-label {
+  font-family: var(--font-handwritten);
+  font-weight: 600;
+  transform: rotate(-1.5deg);
+  display: inline-block;
+}
+
+/* ─── Lined Paper ─── */
+
+.lined-paper {
+  background-image:
+    repeating-linear-gradient(transparent,
+      transparent 30px,
+      var(--sub-color) 30px,
+      var(--sub-color) 31px);
+  background-position: 0 14px;
+  padding-left: 44px;
+  position: relative;
+}
+
+.lined-paper::before {
+  content: '';
+  position: absolute;
+  left: 36px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(196, 114, 74, 0.2);
+}
+
+/* ─── Ink Splatter ─── */
+
+.ink-splatter {
+  position: relative;
+}
+
+.ink-splatter::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 20px;
+  background: radial-gradient(ellipse at center, var(--ink-color) 0%, transparent 70%);
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+/* ─── Thread Line & Pin ─── */
+
+.thread-line {
+  position: relative;
+  padding-left: 20px;
+}
+
+.thread-line::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--thread-color);
+  opacity: 0.5;
+}
+
+.thread-pin {
+  position: relative;
+}
+
+.thread-pin::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--thread-color);
+  box-shadow: 0 0 0 2px var(--bg-color);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GLASS CARDS & UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  box-shadow: 0 4px 16px var(--shadow-color);
+}
+
+.glass-card-sm {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.btn-primary {
+  background: var(--gradient-primary);
+  color: #1c1410;
+  border: none;
+  border-radius: var(--radius-card);
+  padding: 14px 32px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(212, 160, 84, 0.25);
+  letter-spacing: 0.02em;
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(212, 160, 84, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1.5px solid rgba(212, 160, 84, 0.2);
+  border-radius: var(--radius-card);
+  padding: 12px 28px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-ghost:hover {
+  color: var(--main-color);
+  border-color: var(--main-color);
+  background: rgba(212, 160, 84, 0.08);
+}
+
+.warm-glow {
+  text-shadow: 0 2px 20px var(--shadow-warm), 0 4px 40px rgba(212, 160, 84, 0.06);
+}
+
+/* ─── Platform Indicators (clean inline) ─── */
+
+.platform-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--sub-color);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Fun Fact Cards ─── */
+
+.fun-fact-card {
+  padding: 28px 32px;
+  border-left: 3px solid var(--main-color);
+  background: var(--bg-card);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  box-shadow: 0 2px 10px var(--shadow-color);
+}
+
+/* ─── Gamemode Showcase ─── */
+
+.gamemode-showcase {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  padding: 28px 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gamemode-showcase:hover {
+  transform: translateY(-2px);
+}
+
+.gamemode-showcase.reverse {
+  flex-direction: row-reverse;
+}
+
+.gamemode-showcase .showcase-icon {
+  flex-shrink: 0;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  box-shadow: 0 3px 12px var(--shadow-color);
+  transition: transform 0.3s ease;
+}
+
+.gamemode-showcase:hover .showcase-icon {
+  transform: rotate(3deg) scale(1.05);
+}
+
+.gamemode-showcase .showcase-text {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+
+  .gamemode-showcase,
+  .gamemode-showcase.reverse {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .gamemode-showcase .showcase-icon {
+    width: 100px;
+    height: 100px;
+    font-size: 40px;
+  }
+}
+
+/* ─── Navigation Card — Polaroid Style ─── */
+
+.nav-card {
+  background: var(--bg-card);
+  border: 4px solid rgba(212, 160, 84, 0.08);
+  border-bottom-width: 36px;
+  padding: 28px 24px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: visible;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.25);
+  color: var(--text-on-card);
+}
+
+.nav-card::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-1deg);
+  width: 52px;
+  height: 16px;
+  background: var(--tape-color);
+  border-radius: 1px;
+  z-index: 2;
+  transition: transform 0.3s ease;
+}
+
+.nav-card::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-left: 1.5px solid var(--text-dim-card);
+  border-top: 1.5px solid var(--text-dim-card);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.nav-card:hover {
+  transform: translateY(-8px) rotate(0deg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 20px rgba(212, 160, 84, 0.06);
+}
+
+.nav-card:hover::before {
+  transform: translateX(-50%) rotate(1deg);
+}
+
+.nav-card:active {
+  transform: translateY(-2px) rotate(0deg);
+}
+
+/* ─── Card Accent ─── */
+
+.card-accent {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  position: relative;
   overflow: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  box-shadow: 0 2px 8px var(--shadow-warm);
 }
 
-.word-break-fix {
-  word-break: keep-all; 
-  overflow-wrap: normal;
+.card-accent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--accent-strip-height);
+  background: var(--gradient-primary);
 }
 
-/* ============================================ */
-/* MOBILE RESPONSIVE STYLES                     */
-/* ============================================ */
+.line-ornament {
+  width: 64px;
+  height: 1.5px;
+  background: var(--main-color);
+  opacity: 0.4;
+}
 
-/* Allow scrolling on mobile */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Skip entry animations when returning to a visited mode ─── */
+body.skip-entry-anims *,
+body.skip-entry-anims *::before,
+body.skip-entry-anims *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+/* ─── Chat message virtualization via content-visibility ─── */
+.chat-msg-wrap {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 80px;
+}
+
+@keyframes twinkle {
+
+  0%,
+  100% {
+    opacity: var(--star-max);
+  }
+
+  50% {
+    opacity: var(--star-min);
+  }
+}
+
+.bg-star-twinkle {
+  animation: twinkle infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px var(--main-color-dim);
+  }
+
+  50% {
+    box-shadow: 0 0 24px rgba(212, 160, 84, 0.15);
+  }
+}
+
+@keyframes highlight-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(212, 160, 84, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(212, 160, 84, 0.7); }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reveal-line {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 64px;
+  }
+}
+
+@keyframes gentle-bob {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes warm-float {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  33% {
+    transform: translateY(-6px) rotate(1deg);
+  }
+
+  66% {
+    transform: translateY(2px) rotate(-0.5deg);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes reveal-glow {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* ─── Vintage Animations ─── */
+
+@keyframes stamp-press {
+  0% {
+    transform: scale(2) rotate(-8deg);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(0.95) rotate(1deg);
+    opacity: 1;
+  }
+
+  70% {
+    transform: scale(1.05) rotate(-0.5deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes page-turn {
+  0% {
+    transform: perspective(800px) rotateY(0deg);
+  }
+
+  100% {
+    transform: perspective(800px) rotateY(-180deg);
+  }
+}
+
+@keyframes ink-write {
+  from {
+    width: 0;
+    overflow: hidden;
+  }
+
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes tape-stick {
+  0% {
+    transform: translateY(-20px) rotate(-3deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: translateY(2px) rotate(1deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(0) rotate(-1deg);
+    opacity: 1;
+  }
+}
+
+@keyframes scrapbook-drop {
+  0% {
+    transform: translateY(-30px) rotate(-4deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: translateY(3px) rotate(1deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(0) rotate(var(--card-rotation, 0deg));
+    opacity: 1;
+  }
+}
+
+@keyframes polaroid-scatter {
+  0% {
+    transform: translateY(40px) rotate(var(--card-rotation, 0deg)) scale(0.8);
+    opacity: 0;
+  }
+
+  60% {
+    transform: translateY(-4px) rotate(calc(var(--card-rotation, 0deg) * 1.2)) scale(1.02);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(0) rotate(var(--card-rotation, 0deg)) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.5s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.5s ease-out;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+.animate-gentle-bob {
+  animation: gentle-bob 3s ease-in-out infinite;
+}
+
+.animate-warm-float {
+  animation: warm-float 6s ease-in-out infinite;
+}
+
+.animate-reveal-glow {
+  animation: reveal-glow 0.8s ease-out;
+}
+
+.animate-stamp-press {
+  animation: stamp-press 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-scrapbook-drop {
+  animation: scrapbook-drop 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.delay-1 {
+  animation-delay: 0.1s;
+  animation-fill-mode: both;
+}
+
+.delay-2 {
+  animation-delay: 0.2s;
+  animation-fill-mode: both;
+}
+
+.delay-3 {
+  animation-delay: 0.3s;
+  animation-fill-mode: both;
+}
+
+.delay-4 {
+  animation-delay: 0.4s;
+  animation-fill-mode: both;
+}
+
+.delay-5 {
+  animation-delay: 0.5s;
+  animation-fill-mode: both;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sub-color);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sub-color-light);
+}
+
+.scrollbar-hide,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 1200px) {
+  :root {
+    --width-home: 1200px;
+    --width-content: 1020px;
+  }
+}
+
+@media (min-width: 1600px) {
+  :root {
+    --width-home: 1320px;
+    --width-content: 1120px;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
 @media (max-width: 768px) {
   body {
     overflow-y: auto;
-    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
   }
 }
 
-/* Mobile keyboard container */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+.show-on-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .show-on-mobile {
+    display: flex;
+  }
+}
+
+@media (max-width: 768px) {
+  html {
+    overflow-x: hidden;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEGACY TYPING TEST COMPAT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.word-break-fix {
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
 .mobile-keyboard {
   display: none;
 }
@@ -71,21 +1605,21 @@ body {
     gap: 4px;
     padding: 8px;
     background: rgba(0, 0, 0, 0.3);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     width: 100%;
     max-width: 100vw;
   }
-  
+
   .keyboard-row {
     display: flex;
     justify-content: center;
     gap: 3px;
   }
-  
+
   .keyboard-key {
     min-width: 28px;
     height: 42px;
-    border-radius: 6px;
+    border-radius: 4px;
     background: var(--sub-color);
     color: var(--text-color);
     font-size: 14px;
@@ -96,106 +1630,87 @@ body {
     justify-content: center;
     cursor: pointer;
     transition: all 0.1s ease;
-    -webkit-tap-highlight-color: transparent;
   }
-  
+
   .keyboard-key:active {
     background: var(--main-color);
     transform: scale(0.95);
   }
-  
+
   .keyboard-key.space {
     flex: 1;
     max-width: 200px;
     min-width: 120px;
   }
-  
+
   .keyboard-key.backspace {
     min-width: 50px;
   }
 }
 
-/* Hide on mobile only */
-@media (max-width: 768px) {
-  .hide-on-mobile {
+/* ═══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION — Respect user preference
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+
+  .grain-overlay,
+  .paper-fibers {
     display: none !important;
   }
-}
 
-/* Show on mobile only */
-.show-on-mobile {
-  display: none;
-}
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 
-@media (max-width: 768px) {
-  .show-on-mobile {
-    display: flex;
-  }
-}
-
-/* Mobile text sizes */
-@media (max-width: 768px) {
-  .mobile-text-sm {
-    font-size: 14px !important;
-  }
-  
-  .mobile-text-base {
-    font-size: 16px !important;
-  }
-  
-  .mobile-text-lg {
-    font-size: 18px !important;
-  }
-  
-  .mobile-text-xl {
-    font-size: 20px !important;
-  }
-  
-  .mobile-text-2xl {
-    font-size: 24px !important;
+  /* Keep essential opacity transitions for feedback */
+  .animate-pulse {
+    animation: none !important;
   }
 }
 
-/* Mobile spacing */
-@media (max-width: 768px) {
-  .mobile-px-2 {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLOATING PARTICLES (CSS-only, compositor-thread)
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes float-up {
+  0% {
+    transform: translateY(110vh) rotate(var(--rot-start));
+    opacity: 0;
   }
-  
-  .mobile-py-2 {
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
+
+  15% {
+    opacity: var(--peak-opacity);
   }
-  
-  .mobile-gap-2 {
-    gap: 8px !important;
+
+  85% {
+    opacity: var(--peak-opacity);
+  }
+
+  100% {
+    transform: translateY(-10vh) rotate(var(--rot-end));
+    opacity: 0;
   }
 }
 
-/* Mobile safe area for notch phones */
-@supports (padding-top: env(safe-area-inset-top)) {
-  body {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+/* ═══════════════════════════════════════════════════════════════════════════
+   SKELETON LOADING ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
   }
 }
 
-/* Scrollbar hide utility */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-/* No scrollbar for entire html on mobile */
-@media (max-width: 768px) {
-  html {
-    overflow-x: hidden;
-  }
+.skeleton-shimmer {
+  background: linear-gradient(90deg,
+      var(--bg-card) 0%,
+      var(--bg-secondary) 50%,
+      var(--bg-card) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }

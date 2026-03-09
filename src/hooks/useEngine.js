@@ -59,6 +59,15 @@ export const useEngine = () => {
         const remaining = timerDuration - elapsedSec;
 
         if (remaining <= 0) {
+          // Calculate final stats before ending to ensure last keystroke is counted
+          setTyped(currentTyped => {
+            const { net, raw, acc, stats } = calculateResults(currentTyped, words, timerDuration);
+            setWpm(net);
+            setRawWpm(raw);
+            setAccuracy(acc);
+            setCharStats(stats);
+            return currentTyped;
+          });
           endGame();
           return;
         }
@@ -95,10 +104,6 @@ export const useEngine = () => {
     if (state === "start") {
       setState("run");
     }
-
-    // Play Sound (Simple mechanical click)
-    // We will handle the actual audio play in App.jsx to keep hook pure, 
-    // or trigger a state toggle here if needed.
 
     if (key === "Backspace") {
       setTyped((prev) => prev.slice(0, -1));

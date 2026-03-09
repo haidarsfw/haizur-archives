@@ -1,153 +1,222 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// 👇 CUSTOMIZE YOUR LETTERS HERE!
-// You can add as many as you want. Set the 'req' (Required WPM) higher for harder unlocks.
 const LETTERS = [
-  {
-    id: 1,
-    req: 10,
-    title: "noob km",
-    body: "ayoo pasti km bisa"
-  },
-  {
-    id: 2,
-    req: 30,
-    title: "wow dik",
-    body: "jujurly masih pelan sih tp aku sayang km bgt zura"
-  },
-  {
-    id: 3,
-    req: 50,
-    title: "WHOAA",
-    body: "km ngecit ya princess kok jago"
-  },
-  {
-    id: 4,
-    req: 70,
-    title: "HAAH?!",
-    body: "km kacau bgt sih sayang aku love km forever SAYAAAAAAAAAAAAANG"
-  },
-  {
-    id: 5,
-    req: 100,
-    title: "GODLIKE",
-    body: "100 WPM?! STOP! You're too powerful! Marry me right now. 💍"
-  }
+  { id: 1, req: 10, title: "noob km", body: "ayoo pasti km bisa" },
+  { id: 2, req: 30, title: "wow dik", body: "jujurly masih pelan sih tp aku sayang km bgt zura" },
+  { id: 3, req: 50, title: "WHOAA", body: "km ngecit ya princess kok jago" },
+  { id: 4, req: 70, title: "HAAH?!", body: "km kacau bgt sih sayang aku love km forever SAYAAAAAAAAAAAAANG" },
+  { id: 5, req: 100, title: "GODLIKE", body: "100 WPM?! STOP! You're too powerful! Marry me right now." },
 ];
 
 export default function LoveLetters({ otherUsers = {} }) {
   const [highScore, setHighScore] = useState(0);
   const [selectedLetter, setSelectedLetter] = useState(null);
+  const closeButtonRef = useRef(null);
 
-  // Get partner info
   const partner = Object.values(otherUsers).find(u => u.status === 'letters');
 
-  // Load High Score from Local Storage
   useEffect(() => {
     const saved = localStorage.getItem("haizur_highscore") || 0;
     setHighScore(parseInt(saved));
   }, []);
 
+  // Focus the close button when modal opens
+  useEffect(() => {
+    if (selectedLetter && closeButtonRef.current) {
+      closeButtonRef.current.focus();
+    }
+  }, [selectedLetter]);
+
+  // Close modal on Escape key
+  const handleModalKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
+      setSelectedLetter(null);
+    }
+    // Trap focus within modal
+    if (e.key === 'Tab' && closeButtonRef.current) {
+      e.preventDefault();
+      closeButtonRef.current.focus();
+    }
+  }, []);
+
   return (
-    <div className="w-full max-w-4xl flex flex-col items-center h-full min-h-[500px] p-8">
-      {/* Partner presence indicator */}
+    <div style={{
+      width: '100%', maxWidth: 'var(--width-narrow)', margin: '0 auto', padding: '0 24px 80px',
+      fontFamily: 'var(--font-body)',
+    }}>
       {partner && (
-        <div className="flex items-center gap-2 text-sm mb-4">
-          <div
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ backgroundColor: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}
-          />
-          <span style={{ color: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}>
-            {partner.role === 'princess' ? 'She' : 'He'}'s reading letters too! 💕
-          </span>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 14, color: 'var(--text-dim)', marginBottom: 18, justifyContent: 'center',
+          fontFamily: 'var(--font-handwritten)',
+        }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--main-color)' }} className="animate-pulse" />
+          Reading letters together
         </div>
       )}
 
-      {/* Header */}
-      <div className="text-center mb-8 md:mb-12">
-        <div className="text-[var(--sub-color)] uppercase tracking-widest text-xs font-bold mb-2">Secret Stash</div>
-        <h2 className="text-2xl md:text-4xl font-bold text-[var(--main-color)]">Unlockable Letters</h2>
-        <p className="text-[var(--sub-color)] mt-2 text-sm md:text-base">Your Best: <span className="text-[var(--text-color)] font-bold">{highScore} WPM</span></p>
+      <div style={{ textAlign: 'center', marginBottom: 36 }}>
+        <div style={{
+          fontSize: 13, color: 'var(--sub-color-light)', textTransform: 'uppercase',
+          letterSpacing: '0.14em', fontWeight: 400, marginBottom: 10,
+          fontFamily: 'var(--font-mono)',
+        }}>
+          Secret Stash
+        </div>
+        <h2 style={{
+          fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400,
+          fontStyle: 'italic',
+          color: 'var(--text-color)', margin: 0,
+        }}>
+          Love Notes
+        </h2>
+        <p style={{ fontSize: 15, color: 'var(--text-dim)', marginTop: 10, fontFamily: 'var(--font-handwritten)' }}>
+          Best: <span style={{ color: 'var(--main-color)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{highScore} WPM</span>
+        </p>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-        {LETTERS.map((letter) => {
+      {/* Letter list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {LETTERS.map((letter, idx) => {
           const isUnlocked = highScore >= letter.req;
+          const rotations = [-0.8, 0.5, -0.3, 0.7, -0.5];
 
           return (
-            <motion.div
+            <motion.button
               key={letter.id}
-              whileHover={isUnlocked ? { scale: 1.05 } : {}}
-              whileTap={isUnlocked ? { scale: 0.95 } : {}}
+              whileHover={isUnlocked ? { x: 4, rotate: 0 } : {}}
+              whileTap={isUnlocked ? { scale: 0.98 } : {}}
               onClick={() => isUnlocked && setSelectedLetter(letter)}
-              className={`
-                relative h-40 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all shadow-lg overflow-hidden
-                ${isUnlocked
-                  ? "bg-[var(--bg-color)] border-[var(--main-color)]"
-                  : "bg-[rgba(0,0,0,0.1)] border-[var(--sub-color)] border-opacity-30 cursor-not-allowed grayscale"
-                }
-              `}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 18,
+                padding: '22px 24px', borderRadius: 'var(--radius-card)',
+                border: '1px solid',
+                borderColor: isUnlocked ? 'var(--main-color)' : 'var(--border-color)',
+                background: isUnlocked ? 'var(--bg-card)' : 'var(--bg-secondary)',
+                cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                opacity: isUnlocked ? 1 : 0.5,
+                textAlign: 'left', transition: 'all 0.2s',
+                transform: `rotate(${rotations[idx]}deg)`,
+                boxShadow: isUnlocked ? '0 2px 8px var(--shadow-color)' : 'none',
+                position: 'relative',
+              }}
             >
-              {/* Icon */}
-              <div className="text-4xl mb-2">
-                {isUnlocked ? "💌" : "🔒"}
+              <div style={{
+                width: 40, height: 40,
+                borderRadius: '50%',
+                background: isUnlocked
+                  ? 'radial-gradient(circle at 35% 35%, var(--main-color), var(--wax-seal-color, var(--main-color)))'
+                  : 'var(--sub-color)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18,
+                boxShadow: isUnlocked ? 'inset 0 -2px 4px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2)' : 'none',
+                flexShrink: 0,
+              }}>
+                {isUnlocked ? '💌' : '🔒'}
               </div>
-
-              {/* Text */}
-              <div className="text-center z-10">
-                <div className={`font-bold ${isUnlocked ? "text-[var(--text-color)]" : "text-[var(--sub-color)]"}`}>
-                  {isUnlocked ? letter.title : "Locked"}
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 17, fontWeight: 600,
+                  color: isUnlocked ? 'var(--text-on-card)' : 'var(--sub-color)',
+                  fontFamily: isUnlocked ? 'var(--font-handwritten)' : 'var(--font-body)',
+                }}>
+                  {isUnlocked ? letter.title : 'Locked'}
                 </div>
                 {!isUnlocked && (
-                  <div className="text-xs text-[var(--sub-color)] mt-1">Requires {letter.req} WPM</div>
+                  <div style={{
+                    fontSize: 14, color: 'var(--sub-color)', marginTop: 3,
+                    fontFamily: 'var(--font-mono)',
+                  }}>
+                    Requires {letter.req} WPM
+                  </div>
                 )}
               </div>
-
-              {/* Shine Effect if unlocked */}
-              {isUnlocked && (
-                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-[rgba(255,255,255,0.1)] to-transparent opacity-50" />
-              )}
-            </motion.div>
+              <div style={{
+                fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--sub-color-light)',
+              }}>
+                {letter.req} wpm
+              </div>
+            </motion.button>
           );
         })}
       </div>
 
-      {/* READING MODAL */}
+      {/* Reading Modal */}
       <AnimatePresence>
         {selectedLetter && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.8)] backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label={selectedLetter?.title || 'Love letter'}
+            onKeyDown={handleModalKeyDown}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 100,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+              padding: 20,
+            }}
             onClick={() => setSelectedLetter(null)}
           >
             <motion.div
-              initial={{ scale: 0.5, y: 100, rotateX: 90 }}
-              animate={{ scale: 1, y: 0, rotateX: 0 }}
-              exit={{ scale: 0.5, opacity: 0 }}
-              transition={{ type: "spring", damping: 15 }}
-              className="bg-[#fff0f5] text-[#59404c] p-10 rounded-xl max-w-lg w-full shadow-2xl relative border-4 border-[var(--main-color)]"
+              initial={{ scale: 0.9, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 20 }}
+              style={{
+                padding: '48px 36px', maxWidth: 420, width: '100%',
+                textAlign: 'center',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--main-color)',
+                borderRadius: 'var(--radius-card)',
+                boxShadow: '0 8px 36px rgba(0,0,0,0.3)',
+                position: 'relative',
+              }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="text-center mb-6">
-                <span className="text-5xl">💌</span>
+              {/* Wax seal */}
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
+                background: 'radial-gradient(circle at 35% 35%, var(--main-color), var(--wax-seal-color, var(--main-color)))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 24,
+                boxShadow: 'inset 0 -3px 6px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2)',
+              }}>
+                💌
               </div>
-              <h3 className="text-2xl font-bold mb-4 text-[#ff5c8d] text-center">{selectedLetter.title}</h3>
-              <p className="text-lg leading-relaxed font-medium font-serif text-center">
+              <h3 style={{
+                fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 400,
+                fontStyle: 'italic',
+                color: 'var(--main-color)', margin: '0 0 18px',
+              }}>
+                {selectedLetter.title}
+              </h3>
+              <p style={{
+                fontSize: 18, lineHeight: 1.8, color: 'var(--text-on-card)',
+                fontFamily: 'var(--font-handwritten)', fontWeight: 400,
+                margin: 0,
+              }}>
                 "{selectedLetter.body}"
               </p>
               <button
+                ref={closeButtonRef}
                 onClick={() => setSelectedLetter(null)}
-                className="mt-8 w-full py-3 bg-[#ff5c8d] text-white font-bold rounded-lg hover:bg-[#ff3366] transition"
+                style={{
+                  marginTop: 32, width: '100%', padding: '14px 28px',
+                  background: 'var(--main-color)', color: 'var(--bg-color)',
+                  border: 'none', borderRadius: 'var(--radius-card)',
+                  fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  cursor: 'pointer',
+                }}
               >
-                Close Letter
+                Close
               </button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

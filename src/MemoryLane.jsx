@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { speakerNames } from "./words";
-import { loadHistoryByDate } from "./dataLoader";
+import { loadHistoryByDate, PLATFORMS } from "./dataLoader";
+import PlatformIcon from "./PlatformIcons";
+import MediaRenderer from "./MediaRenderer";
 
-// Seeded random for sync
 function seededRandom(seed) {
   const x = Math.sin(seed++) * 10000;
   return x - Math.floor(x);
@@ -14,7 +15,6 @@ export default function MemoryLane({ otherUsers = {}, session = {}, updateSessio
   const [historyByDate, setHistoryByDate] = useState({});
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load data on mount
   useEffect(() => {
     loadHistoryByDate()
       .then(data => {
@@ -27,52 +27,40 @@ export default function MemoryLane({ otherUsers = {}, session = {}, updateSessio
       });
   }, []);
 
-  // Use synced seed for same random date
   const seed = session.gameData?.memorySeed || Date.now();
 
   const { currentDate, messages } = useMemo(() => {
     const dates = Object.keys(historyByDate);
     if (dates.length === 0) return { currentDate: null, messages: [] };
-
     const randomIndex = Math.floor(seededRandom(seed) * dates.length);
     const date = dates[randomIndex];
     const daysMessages = historyByDate[date];
-
-    // If day has very few messages, try next date
     if (daysMessages.length < 5 && dates.length > 1) {
       const retryIndex = Math.floor(seededRandom(seed + 1) * dates.length);
       const retryDate = dates[retryIndex];
       return { currentDate: retryDate, messages: historyByDate[retryDate] };
     }
-
     return { currentDate: date, messages: daysMessages };
   }, [seed, historyByDate]);
 
-  // Auto-scroll to top when date changes
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [currentDate]);
 
   const pickRandomDate = () => {
     if (updateSession) {
-      updateSession({
-        gameData: {
-          ...session.gameData,
-          memorySeed: Date.now()
-        }
-      });
+      updateSession({ gameData: { ...session.gameData, memorySeed: Date.now() } });
     }
   };
 
   const formatName = (key) => speakerNames[key] ? speakerNames[key].toLowerCase() : "???";
 
-  // Get partner info
   const partner = Object.values(otherUsers).find(u => u.status === 'memory');
 
   if (isLoading) {
     return (
       <div className="w-full max-w-4xl flex flex-col items-center justify-center h-[500px]">
-        <div className="text-[var(--main-color)] text-xl animate-pulse">Loading memories...</div>
+        <div style={{ color: 'var(--main-color)', fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 18 }}>Loading memories...</div>
       </div>
     );
   }
@@ -80,70 +68,138 @@ export default function MemoryLane({ otherUsers = {}, session = {}, updateSessio
   return (
     <div className="w-full max-w-4xl flex flex-col items-center h-[500px] md:h-[600px] max-h-[70vh] md:max-h-[80vh] px-2 md:px-0">
 
-      {/* Partner presence indicator */}
       {partner && (
-        <div className="flex items-center gap-2 text-sm mb-4">
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 14, color: 'var(--text-dim)', marginBottom: 14,
+          fontFamily: 'var(--font-handwritten)',
+        }}>
           <div
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ backgroundColor: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}
+            className="animate-pulse"
+            style={{
+              width: 7, height: 7, borderRadius: '50%',
+              backgroundColor: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)',
+            }}
           />
-          <span style={{ color: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}>
-            {partner.role === 'princess' ? 'She' : 'He'}'s reading with you 💕
+          <span style={{ color: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)' }}>
+            {partner.role === 'princess' ? 'She' : 'He'}'s reading with you
           </span>
         </div>
       )}
 
-      {/* HEADER & REROLL BUTTON */}
-      <div className="flex justify-between items-center w-full max-w-2xl mb-4 md:mb-6 px-2 md:px-4">
-        <div className="flex flex-col">
-          <span className="text-[var(--sub-color)] text-xs font-bold uppercase tracking-widest">Time Travel</span>
-          <span className="text-lg md:text-2xl font-bold text-[var(--main-color)]">{currentDate || "Loading..."}</span>
+      {/* Header */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center',
+        gap: '8px 12px',
+        width: '100%', maxWidth: 680, marginBottom: 18, padding: '0 10px',
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <span style={{
+            fontSize: 13, color: 'var(--sub-color-light)', textTransform: 'uppercase',
+            letterSpacing: '0.14em', fontFamily: 'var(--font-mono)', fontWeight: 400,
+          }}>
+            Time Travel
+          </span>
+          <span style={{
+            fontSize: 'clamp(22px, 4vw, 30px)', fontWeight: 400, color: 'var(--main-color)',
+            fontFamily: 'var(--font-display)', fontStyle: 'italic',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {currentDate || "Loading..."}
+          </span>
         </div>
         <button
           onClick={pickRandomDate}
-          className="px-4 md:px-6 py-2 bg-[var(--sub-color)] hover:bg-[var(--main-color)] text-[var(--bg-color)] font-bold rounded-lg transition text-sm md:text-base"
+          style={{
+            padding: '10px 20px', background: 'var(--sub-color)', color: 'var(--bg-color)',
+            border: 'none', borderRadius: 'var(--radius-card)', cursor: 'pointer',
+            fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+            transition: 'all 0.2s', flexShrink: 0,
+          }}
         >
-          🎲 Random
+          Random
         </button>
       </div>
 
-      {/* CHAT CONTAINER (SCROLLABLE) */}
+      <div className="torn-paper-divider" style={{ width: '100%', maxWidth: 680, marginBottom: 10 }} />
+
+      {/* Chat container */}
       <div
         ref={scrollRef}
-        className="w-full max-w-2xl flex-grow overflow-y-auto px-6 py-8 bg-[rgba(0,0,0,0.05)] rounded-2xl border border-[var(--sub-color)] border-opacity-20 shadow-inner scrollbar-hide"
+        className="thread-line no-scrollbar"
+        style={{
+          width: '100%', maxWidth: 680, flexGrow: 1, overflowY: 'auto',
+          padding: 'clamp(16px, 3vw, 24px) clamp(12px, 3vw, 20px) 80px clamp(16px, 4vw, 32px)',
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius-card)',
+          border: '1px solid var(--border-color)',
+          boxShadow: '0 2px 10px var(--shadow-color)',
+        }}
       >
-        <div className="flex flex-col gap-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {messages.map((msg, idx) => {
-            const isMe = msg.speaker === 'p1';
+            const isP1 = msg.speaker === 'p1';
+            const prevMsg = messages[idx - 1];
+            const showSpeaker = !prevMsg || prevMsg.speaker !== msg.speaker;
+
             return (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.01 }}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} w-full`}
+                transition={{ delay: Math.min(idx * 0.01, 1) }}
+                className="thread-pin"
+                style={{
+                  marginBottom: showSpeaker ? 12 : 4,
+                  padding: '10px 16px',
+                  background: isP1 ? 'var(--bg-card)' : 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius-card)',
+                  border: '1px solid var(--border-color)',
+                  boxShadow: '0 1px 3px var(--shadow-color)',
+                  transform: `rotate(${isP1 ? '0.2' : '-0.3'}deg)`,
+                }}
               >
-                <div
-                  className={`
-                    max-w-[90%] md:max-w-[85%] px-4 md:px-5 py-2 md:py-3 rounded-2xl text-base md:text-lg relative leading-relaxed
-                    ${isMe
-                      ? 'bg-[var(--main-color)] text-[var(--bg-color)] rounded-tr-none'
-                      : 'bg-[var(--bg-color)] text-[var(--text-color)] border border-[var(--sub-color)] border-opacity-30 rounded-tl-none shadow-sm'
-                    }
-                  `}
-                >
-                  {msg.text}
+                {showSpeaker && (
+                  <div style={{
+                    fontSize: 13, color: 'var(--text-dim-card)', marginBottom: 5,
+                    fontFamily: 'var(--font-mono)',
+                    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 5px',
+                  }}>
+                    <span style={{ color: isP1 ? 'var(--main-color)' : 'var(--sub-color)' }}>
+                      {formatName(msg.speaker)}
+                    </span>
+                    {msg.platform && (
+                      <PlatformIcon platform={msg.platform} size={13} />
+                    )}
+                    {msg.time && (
+                      <span style={{ opacity: 0.4, fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+                        {msg.time?.slice(0, 5)}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <MediaRenderer message={msg} />
+                <div style={{
+                  fontSize: 'clamp(14px, 2.5vw, 16px)', lineHeight: 1.6, wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                  color: 'var(--text-on-card)',
+                  fontFamily: isP1 ? 'var(--font-body)' : 'var(--font-handwritten)',
+                  fontWeight: isP1 ? 400 : 400,
+                }}>
+                  {msg.type === 'text' || !msg.type ? msg.text : (!msg.mediaPath && msg.text ? msg.text : null)}
                 </div>
-                <span className="text-[10px] text-[var(--sub-color)] mt-1 opacity-60 px-1">
-                  {formatName(msg.speaker)}
-                </span>
               </motion.div>
             );
           })}
 
-          {/* End of chat marker */}
-          <div className="text-center text-[var(--sub-color)] text-xs opacity-50 mt-8 mb-4">
-            — End of conversation for {currentDate} —
+          <div style={{
+            textAlign: 'center', fontSize: 15, color: 'var(--text-dim-card)',
+            marginTop: 36, marginBottom: 16,
+            fontFamily: 'var(--font-handwritten)', fontWeight: 400,
+            transform: 'rotate(-1deg)',
+          }}>
+            — end of {currentDate} —
           </div>
         </div>
       </div>

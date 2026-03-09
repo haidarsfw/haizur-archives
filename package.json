@@ -1,5 +1,5 @@
 {
-  "name": "monkeytype-clone",
+  "name": "haizur-archives",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -28,6 +28,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "terser": "^5.44.1",
     "vite": "^7.2.4"

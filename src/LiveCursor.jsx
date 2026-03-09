@@ -3,48 +3,95 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const getModeName = (code) => {
   const map = {
-    typing: "Typing Test", quiz: "Quiz", archive: "Archive", memory: "Memory Lane",
-    finish: "Finish Sentence", stats: "Stats Battle", sky: "Night Sky", boss: "Boss Mode", letters: "Reading Letters"
+    typing: "Type Ours", quiz: "Who?", archive: "Archive", memory: "Rewind",
+    finish: "Complete Us", stats: "Word War", sky: "Late Nights", boss: "Paragraphs", letters: "Love Notes",
+    'chat-browser': "Browse", museum: "Museum", 'platform-quiz': "Where?", 'time-capsule': "On This Day"
   };
   return map[code] || "Menu";
 };
 
-// 👇 THE FIX IS HERE: Add " = {} " inside the parentheses
 export default function LiveCursor({ users = {} }) {
-  const userList = Object.keys(users || {}); // Extra safety check
+  const userList = Object.keys(users || {});
   const isSheOnline = userList.length > 0;
-  
+
   const partner = userList.length > 0 ? users[userList[0]] : null;
 
   return (
     <>
-      {/* STATUS BADGE */}
-      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-3 bg-[rgba(0,0,0,0.8)] backdrop-blur-md px-4 py-3 rounded-xl border border-[var(--main-color)] border-opacity-30 shadow-2xl transition-all duration-500">
-        <div className="relative">
-          <div className={`w-3 h-3 rounded-full ${isSheOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-          {isSheOnline && <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-75"></div>}
-        </div>
-        <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-[var(--sub-color)] uppercase tracking-wider mb-0.5">
-                {isSheOnline ? "ONLINE" : "OFFLINE"}
-            </span>
-            <div className="text-xs font-bold text-[var(--text-color)]">
-                {isSheOnline 
-                    ? (partner?.role === 'princess' 
-                        ? `Princess is in ${getModeName(partner.status)}` 
-                        : `My Prince is in ${getModeName(partner.status)}`)
-                    : "Waiting for connection..."}
-            </div>
-        </div>
-      </div>
+      {/* Status badge */}
+      {isSheOnline ? (
+        <div className="fixed bottom-4 left-4 z-50" style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          padding: '12px 18px',
+          borderRadius: 'var(--radius-card)',
+          boxShadow: '0 2px 8px var(--shadow-color)',
+          transform: 'rotate(-1deg)',
+          position: 'relative',
+        }}>
+          {/* Tape strip at top */}
+          <div style={{
+            position: 'absolute', top: -5, left: '50%', transform: 'translateX(-50%) rotate(1deg)',
+            width: 40, height: 10,
+            background: 'var(--tape-color, rgba(212, 160, 84, 0.5))',
+            borderRadius: 1, opacity: 0.8,
+          }} />
 
-      {/* GHOST CURSORS */}
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: 'var(--success-color)',
+            }} />
+            <div className="animate-pulse" style={{
+              position: 'absolute', inset: -1,
+              width: 10, height: 10, borderRadius: '50%',
+              background: 'var(--success-color)', opacity: 0.4,
+            }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: 'var(--text-dim-card)',
+              textTransform: 'uppercase', letterSpacing: '0.1em',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              Online
+            </span>
+            <span style={{
+              fontSize: 14, fontWeight: 400, color: 'var(--text-on-card)',
+              fontFamily: 'var(--font-handwritten)',
+            }}>
+              {partner?.role === 'princess'
+                ? `Princess is in ${getModeName(partner.status)}`
+                : `My Prince is in ${getModeName(partner.status)}`}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="fixed bottom-4 left-4 z-50" style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          opacity: 0.3,
+        }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: 'var(--sub-color)',
+          }} />
+          <span style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)',
+            color: 'var(--text-dim)', textTransform: 'lowercase',
+          }}>
+            offline
+          </span>
+        </div>
+      )}
+
+      {/* Ghost cursors */}
       <AnimatePresence>
         {userList.map((userId) => {
             const user = users[userId];
             const isPrincess = user.role === 'princess';
-            const label = isPrincess ? "Princess 👑" : "My Prince ⚔️";
-            const color = isPrincess ? "#ff69b4" : "#e2b714"; 
+            const label = isPrincess ? "Princess" : "My Prince";
+            const color = isPrincess ? "var(--partner-princess)" : "var(--partner-prince)";
 
             return (
             <motion.div
@@ -55,15 +102,30 @@ export default function LiveCursor({ users = {} }) {
                 exit={{ opacity: 0 }}
                 transition={{ type: "tween", ease: "linear", duration: 0.1 }}
             >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="transform -translate-x-1 -translate-y-1 drop-shadow-lg">
-                    <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19138L11.4818 12.3673H5.65376Z" fill={color} stroke="white" strokeWidth="2" />
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="transform -translate-x-1 -translate-y-1" style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.3))' }}>
+                    <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19138L11.4818 12.3673H5.65376Z" fill={color} stroke="white" strokeWidth="1.5" />
                 </svg>
-                <div 
-                    className="absolute left-5 top-5 px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap shadow-md flex flex-col gap-0.5"
-                    style={{ backgroundColor: color, color: isPrincess ? 'white' : 'black' }}
-                >
+                <div style={{
+                    position: 'absolute', left: 18, top: 18,
+                    padding: '4px 10px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-card)',
+                    fontSize: 11, fontWeight: 600,
+                    fontFamily: 'var(--font-handwritten)',
+                    color: 'var(--text-on-card)',
+                    boxShadow: '0 1px 3px var(--shadow-color)',
+                    whiteSpace: 'nowrap',
+                    transform: 'rotate(1deg)',
+                    display: 'flex', flexDirection: 'column', gap: 1,
+                    borderLeft: `2px solid ${color}`,
+                }}>
                     <span>{label}</span>
-                    <span className="opacity-80 font-normal text-[8px] uppercase">{getModeName(user.status)}</span>
+                    <span style={{
+                      opacity: 0.6, fontSize: 9,
+                      fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+                      maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>{getModeName(user.status)}</span>
                 </div>
             </motion.div>
             );

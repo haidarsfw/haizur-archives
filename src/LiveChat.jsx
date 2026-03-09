@@ -21,7 +21,7 @@ import AudioCall from "./AudioCall";
 
 // Chat theme presets
 const CHAT_THEMES = {
-    default: { name: "Classic", myBubble: "#646cff", theirBubble: "#ec4899", bg: "transparent", emoji: "💬" },
+    default: { name: "Classic", myBubble: "var(--partner-prince)", theirBubble: "var(--partner-princess)", bg: "transparent", emoji: "💬" },
     love: { name: "Love", myBubble: "#ef4444", theirBubble: "#ec4899", bg: "linear-gradient(180deg, rgba(236,72,153,0.05) 0%, transparent 100%)", emoji: "❤️" },
     ocean: { name: "Ocean", myBubble: "#0ea5e9", theirBubble: "#14b8a6", bg: "linear-gradient(180deg, rgba(14,165,233,0.05) 0%, transparent 100%)", emoji: "🌊" },
     sunset: { name: "Sunset", myBubble: "#f97316", theirBubble: "#a855f7", bg: "linear-gradient(180deg, rgba(249,115,22,0.05) 0%, transparent 100%)", emoji: "🌅" },
@@ -473,11 +473,6 @@ const LiveChat = ({ theme, isPopup = false }) => {
         setPlayingVoiceId(messageId);
     };
 
-    // Voice messages no longer expire
-    const isVoiceExpired = (msg) => {
-        return false; // Disabled expiry
-    };
-
     const formatRecordingTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -680,37 +675,62 @@ const LiveChat = ({ theme, isPopup = false }) => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex flex-col items-center justify-center gap-6 p-8 min-h-[300px]"
             >
-                <div className="text-center">
+                <div style={{ textAlign: 'center' }}>
+                    {/* Wax seal decoration */}
                     <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", delay: 0.1 }}
-                        className="text-5xl mb-4"
+                        style={{
+                            width: 56, height: 56, borderRadius: '50%', margin: '0 auto 14px',
+                            background: 'radial-gradient(circle at 35% 35%, var(--main-color), var(--wax-seal-color, var(--main-color)))',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 22,
+                            boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2)',
+                        }}
                     >
-                        💬
+                        ✉
                     </motion.div>
-                    <h2 className="text-2xl font-bold text-[var(--text-color)] mb-1">Live Chat</h2>
-                    <p className="text-[var(--sub-color)] text-sm">Select your identity to start chatting</p>
+                    <h2 style={{
+                        fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 400,
+                        fontStyle: 'italic', color: 'var(--text-color)', marginBottom: 6,
+                    }}>Correspondence</h2>
+                    <p style={{
+                        color: 'var(--text-dim)', fontSize: 15,
+                        fontFamily: 'var(--font-handwritten)',
+                    }}>Select your identity to start chatting</p>
                 </div>
 
                 <div className="flex gap-3">
                     <motion.button
-                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileHover={{ scale: 1.05, y: -2, rotate: 0 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => selectRole("haidar")}
-                        className="px-6 py-3 rounded-2xl font-semibold text-white shadow-lg"
-                        style={{ background: "linear-gradient(135deg, #646cff, #5558dd)" }}
+                        style={{
+                            padding: '16px 28px', borderRadius: 'var(--radius-card)',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-card)', color: 'var(--text-on-card)',
+                            fontFamily: 'var(--font-handwritten)', fontSize: 17, fontWeight: 600,
+                            cursor: 'pointer', boxShadow: '0 2px 6px var(--shadow-color)',
+                            transform: 'rotate(-1.5deg)',
+                        }}
                     >
-                        ⭐ Haidar
+                        Haidar
                     </motion.button>
                     <motion.button
-                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileHover={{ scale: 1.05, y: -2, rotate: 0 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => selectRole("princess")}
-                        className="px-6 py-3 rounded-2xl font-semibold text-white shadow-lg"
-                        style={{ background: "linear-gradient(135deg, #ec4899, #db2777)" }}
+                        style={{
+                            padding: '16px 28px', borderRadius: 'var(--radius-card)',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-card)', color: 'var(--text-on-card)',
+                            fontFamily: 'var(--font-handwritten)', fontSize: 17, fontWeight: 600,
+                            cursor: 'pointer', boxShadow: '0 2px 6px var(--shadow-color)',
+                            transform: 'rotate(1.2deg)',
+                        }}
                     >
-                        👸 Princess
+                        Princess
                     </motion.button>
                 </div>
             </motion.div>
@@ -724,20 +744,35 @@ const LiveChat = ({ theme, isPopup = false }) => {
             style={{ background: currentTheme.bg }}
         >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-[rgba(0,0,0,0.03)] border-b border-[rgba(0,0,0,0.05)]">
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <span className="text-xl">{role === "haidar" ? "⭐" : "👸"}</span>
-                        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-color)] ${connectionStatus === "connected" ? "bg-green-500" :
-                            connectionStatus === "connecting" ? "bg-yellow-500 animate-pulse" : "bg-red-500"
-                            }`} />
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 16px',
+                background: 'var(--bg-card)',
+                borderBottom: '1px solid var(--border-color)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ position: 'relative' }}>
+                        <span style={{ fontSize: 18 }}>{role === "haidar" ? "✒" : "✉"}</span>
+                        <span style={{
+                            position: 'absolute', bottom: -2, right: -2,
+                            width: 8, height: 8, borderRadius: '50%',
+                            border: '1.5px solid var(--bg-color)',
+                            background: connectionStatus === "connected" ? "var(--success-color)" :
+                                connectionStatus === "connecting" ? "var(--honey-color)" : "var(--sub-color)",
+                        }} className={connectionStatus === "connecting" ? "animate-pulse" : ""} />
                     </div>
                     <div>
-                        <span className="font-semibold text-[var(--text-color)] text-sm">
+                        <span style={{
+                            fontFamily: 'var(--font-handwritten)', fontSize: 16, fontWeight: 600,
+                            color: 'var(--text-on-card)',
+                        }}>
                             {role === "haidar" ? "Haidar" : "Princess"}
                         </span>
-                        <span className="text-[10px] text-[var(--sub-color)] ml-2">
-                            {connectionStatus === "connected" ? "● live" : connectionStatus === "connecting" ? "connecting..." : "offline"}
+                        <span style={{
+                            fontSize: 11, color: 'var(--text-dim-card)', marginLeft: 8,
+                            fontFamily: 'var(--font-mono)',
+                        }}>
+                            {connectionStatus === "connected" ? "live" : connectionStatus === "connecting" ? "connecting..." : "offline"}
                         </span>
                     </div>
                 </div>
@@ -747,7 +782,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setIsCallOpen(true)}
-                        className="p-2 rounded-full hover:bg-[rgba(0,0,0,0.05)] transition-colors text-green-500"
+                        className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors text-green-500"
                         title="Voice Call"
                     >
                         📞
@@ -757,7 +792,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setShowStarred(!showStarred)}
-                        className={`p-2 rounded-full transition-colors ${showStarred ? 'bg-yellow-400 text-white' : 'hover:bg-[rgba(0,0,0,0.05)]'}`}
+                        className={`p-2 rounded-full transition-colors ${showStarred ? 'bg-yellow-400 text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                         title="Starred Messages"
                     >
                         ⭐
@@ -767,7 +802,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setShowSearch(!showSearch)}
-                        className={`p-2 rounded-full transition-colors ${showSearch ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(0,0,0,0.05)]'}`}
+                        className={`p-2 rounded-full transition-colors ${showSearch ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                         title="Search"
                     >
                         🔍
@@ -776,7 +811,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => { setShowThemePicker(!showThemePicker); setShowEmojiPicker(false); setShowStickerPicker(false); }}
-                        className={`p-2 rounded-full transition-colors ${showThemePicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(0,0,0,0.05)]'}`}
+                        className={`p-2 rounded-full transition-colors ${showThemePicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                     >
                         🎨
                     </motion.button>
@@ -784,13 +819,13 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setSoundEnabled(!soundEnabled)}
-                        className="p-2 rounded-full hover:bg-[rgba(0,0,0,0.05)] transition-colors"
+                        className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors"
                     >
                         {soundEnabled ? "🔔" : "🔕"}
                     </motion.button>
                     <button
                         onClick={() => { localStorage.removeItem("haizur-chat-role"); setRole(null); }}
-                        className="text-xs text-[var(--sub-color)] hover:text-[var(--text-color)] px-2 py-1 rounded-lg hover:bg-[rgba(0,0,0,0.05)] transition-colors ml-1"
+                        className="text-[13px] text-[var(--text-dim-card)] hover:text-[var(--text-on-card)] px-2 py-1 rounded-lg hover:bg-[rgba(255,255,255,0.08)] transition-colors ml-1"
                     >
                         Switch
                     </button>
@@ -805,7 +840,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="overflow-hidden bg-[var(--bg-color)] border-b border-[rgba(0,0,0,0.05)]"
+                        className="overflow-hidden bg-[var(--bg-color)] border-b border-[rgba(255,255,255,0.08)]"
                     >
                         <div className="flex gap-2 p-3 overflow-x-auto">
                             {Object.entries(CHAT_THEMES).map(([key, t]) => (
@@ -814,10 +849,17 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => { setChatTheme(key); setShowThemePicker(false); }}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${chatTheme === key
-                                        ? "bg-[var(--main-color)] text-white shadow-md"
-                                        : "bg-[rgba(0,0,0,0.05)] text-[var(--text-color)] hover:bg-[rgba(0,0,0,0.1)]"
-                                        }`}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 6,
+                                        padding: '6px 12px', borderRadius: 'var(--radius-card)',
+                                        fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
+                                        fontFamily: 'var(--font-handwritten)',
+                                        background: chatTheme === key ? 'var(--main-color)' : 'var(--bg-secondary)',
+                                        color: chatTheme === key ? 'var(--bg-color)' : 'var(--text-color)',
+                                        border: '1px solid',
+                                        borderColor: chatTheme === key ? 'var(--main-color)' : 'var(--border-color)',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                    }}
                                 >
                                     {t.emoji} {t.name}
                                 </motion.button>
@@ -834,15 +876,23 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden bg-[var(--bg-color)] border-b border-[rgba(0,0,0,0.05)]"
+                        className="overflow-hidden bg-[var(--bg-color)] border-b border-[rgba(255,255,255,0.08)]"
                     >
-                        <div className="flex items-center gap-2 p-3">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12 }}>
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search messages..."
-                                className="flex-1 px-3 py-2 rounded-xl bg-[rgba(0,0,0,0.05)] text-sm outline-none"
+                                style={{
+                                    flex: 1, padding: '8px 12px',
+                                    borderRadius: 'var(--radius-card)',
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-color)',
+                                    fontSize: 15, outline: 'none',
+                                    fontFamily: 'var(--font-mono)',
+                                }}
                             />
                             {searchQuery && (
                                 <button onClick={() => setSearchQuery("")} className="text-xs text-[var(--sub-color)]">
@@ -868,7 +918,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         exit={{ opacity: 0, height: 0 }}
                         className="px-4 py-2 bg-[var(--bg-color)]"
                     >
-                        <div className="flex items-center gap-2 text-xs text-[var(--sub-color)]">
+                        <div className="flex items-center gap-2 text-[13px] text-[var(--text-dim)]">
                             <span>{role === "haidar" ? "👸 Princess" : "⭐ Haidar"} is typing</span>
                             <motion.div className="flex gap-0.5">
                                 {[0, 1, 2].map(i => (
@@ -876,7 +926,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                         key={i}
                                         animate={{ opacity: [0.3, 1, 0.3] }}
                                         transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.2 }}
-                                        className="w-1.5 h-1.5 bg-[var(--sub-color)] rounded-full"
+                                        className="w-1.5 h-1.5 bg-[var(--text-dim)] rounded-full"
                                     />
                                 ))}
                             </motion.div>
@@ -903,10 +953,15 @@ const LiveChat = ({ theme, isPopup = false }) => {
             >
                 {Object.entries(groupedMessages).map(([date, msgs]) => (
                     <div key={date}>
-                        <div className="flex justify-center my-4">
-                            <span className="text-[10px] text-[var(--sub-color)] bg-[rgba(0,0,0,0.05)] px-3 py-1 rounded-full">
+                        <div style={{ position: 'relative', padding: '16px 0 8px' }}>
+                            <div className="torn-paper-divider" style={{ margin: '0 0 6px' }} />
+                            <div style={{
+                                textAlign: 'center', fontSize: 13, color: 'var(--text-dim)',
+                                fontFamily: 'var(--font-handwritten)', fontWeight: 500,
+                                transform: 'rotate(-0.5deg)',
+                            }}>
                                 {date}
-                            </span>
+                            </div>
                         </div>
 
                         {msgs.map((msg, idx) => {
@@ -917,27 +972,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                             const isCustomSticker = isSticker && typeof msg.sticker === 'string' && msg.sticker.startsWith('data:');
                             const isVoice = !!msg.voiceMessage;
                             const isImage = !!msg.image;
-                            const voiceExpired = isVoice && isVoiceExpired(msg);
                             const isDeleted = msg.deletedForEveryone;
-
-                            // Don't render expired voice messages (or show as expired)
-                            if (voiceExpired) {
-                                return (
-                                    <motion.div
-                                        key={msg.id || idx}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 0.5 }}
-                                        className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
-                                    >
-                                        <div
-                                            className={`px-3 py-2 rounded-2xl ${isMe ? "rounded-br-md" : "rounded-bl-md"} text-xs italic`}
-                                            style={{ backgroundColor: 'rgba(0,0,0,0.1)', color: 'var(--sub-color)' }}
-                                        >
-                                            🎤 Voice message expired 💨
-                                        </div>
-                                    </motion.div>
-                                );
-                            }
 
                             // Show deleted indicator
                             if (isDeleted) {
@@ -949,10 +984,14 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                         className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
                                     >
                                         <div
-                                            className={`px-3 py-2 rounded-2xl ${isMe ? "rounded-br-md" : "rounded-bl-md"} text-xs italic border border-dashed border-[var(--sub-color)]`}
-                                            style={{ backgroundColor: 'transparent', color: 'var(--sub-color)' }}
+                                            className="px-3 py-2 text-sm italic"
+                                            style={{
+                                                borderRadius: 'var(--radius-card)',
+                                                backgroundColor: 'transparent', color: 'var(--text-dim)',
+                                                border: '1px dashed var(--text-dim)',
+                                            }}
                                         >
-                                            🚫 This message was deleted
+                                            This message was deleted
                                         </div>
                                     </motion.div>
                                 );
@@ -977,10 +1016,13 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                     setActiveReactionMessage(activeReactionMessage === msg.id ? null : msg.id);
                                                 }
                                             }}
-                                            className={`cursor-pointer ${isSticker ? 'p-2' : isImage ? 'p-1' : 'px-3.5 py-2'} rounded-2xl ${isMe ? "rounded-br-md" : "rounded-bl-md"}`}
+                                            className={`cursor-pointer ${isSticker ? 'p-2' : isImage ? 'p-1' : 'px-3.5 py-2'}`}
                                             style={{
+                                                borderRadius: 'var(--radius-card)',
                                                 backgroundColor: isSticker || isImage ? 'transparent' : bubbleColor,
-                                                color: isSticker || isImage ? 'inherit' : '#fff'
+                                                color: isSticker || isImage ? 'inherit' : '#fff',
+                                                boxShadow: isSticker || isImage ? 'none' : '0 1px 3px var(--shadow-color)',
+                                                /* no rotation for readability */
                                             }}
                                         >
                                             {/* Starred indicator */}
@@ -990,7 +1032,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
 
                                             {/* Reply preview */}
                                             {msg.replyTo && (
-                                                <div className="mb-1 px-2 py-1 rounded bg-white/10 border-l-2 border-white/30 text-[11px] opacity-80">
+                                                <div className="mb-1 px-2 py-1 rounded bg-white/10 border-l-2 border-white/30 text-[12px] opacity-80">
                                                     <span className="font-medium">{msg.replyTo.sender === "haidar" ? "Haidar" : "Princess"}: </span>
                                                     {msg.replyTo.text}
                                                 </div>
@@ -1044,16 +1086,16 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                                 />
                                                             ))}
                                                         </div>
-                                                        <span className="text-[9px] opacity-70">
+                                                        <span className="text-[11px] opacity-70">
                                                             {msg.voiceDuration ? `0:${String(msg.voiceDuration).padStart(2, '0')}` : '0:00'}
                                                         </span>
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p className="text-sm leading-relaxed break-words">{msg.text}</p>
+                                                <p className="text-[15px] leading-relaxed break-words">{msg.text}</p>
                                             )}
                                             {!isSticker && !isVoice && !isImage && (
-                                                <p className="text-[9px] opacity-60 text-right mt-0.5 flex items-center justify-end gap-1">
+                                                <p className="text-[11px] opacity-60 text-right mt-0.5 flex items-center justify-end gap-1">
                                                     {formatTime(msg.timestamp)}
                                                     {isMe && (
                                                         <span className={msg.readBy?.length > 1 ? "text-blue-400" : "opacity-50"}>
@@ -1065,7 +1107,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                             {/* Read receipt for stickers/images/voice */}
                                             {(isSticker || isVoice || isImage) && isMe && (
                                                 <div className="text-right mt-1">
-                                                    <span className={`text-[10px] ${msg.readBy?.length > 1 ? "text-blue-400" : "text-gray-400"}`}>
+                                                    <span className={`text-[11px] ${msg.readBy?.length > 1 ? "text-blue-400" : "text-gray-400"}`}>
                                                         {msg.readBy?.length > 1 ? "✓✓" : "✓"}
                                                     </span>
                                                 </div>
@@ -1098,7 +1140,15 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                     exit={{ opacity: 0, y: 5, scale: 0.9 }}
                                                     transition={{ duration: 0.15 }}
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className={`absolute ${isMe ? "right-0" : "left-0"} -top-12 bg-[var(--bg-color)] shadow-lg rounded-xl px-1.5 py-1 z-20 border border-[rgba(0,0,0,0.1)]`}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        [isMe ? 'right' : 'left']: 0, top: -44,
+                                                        background: 'var(--bg-card)',
+                                                        border: '1px solid var(--border-color)',
+                                                        borderRadius: 'var(--radius-card)',
+                                                        padding: '4px 6px', zIndex: 20,
+                                                        boxShadow: '0 2px 8px var(--shadow-color)',
+                                                    }}
                                                 >
                                                     {/* Reactions row */}
                                                     <div className="flex gap-0.5">
@@ -1108,18 +1158,18 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                                 whileHover={{ scale: 1.2 }}
                                                                 whileTap={{ scale: 0.9 }}
                                                                 onClick={(e) => { e.stopPropagation(); toggleReaction(msg.id, emoji); }}
-                                                                className="text-base p-0.5 hover:bg-[rgba(0,0,0,0.05)] rounded-full transition-colors"
+                                                                className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
                                                             >
                                                                 {emoji}
                                                             </motion.button>
                                                         ))}
-                                                        <div className="w-px bg-[rgba(0,0,0,0.1)] mx-0.5" />
+                                                        <div className="w-px bg-[rgba(255,255,255,0.1)] mx-0.5" />
                                                         {/* Actions - icons only */}
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
                                                             onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveReactionMessage(null); inputRef.current?.focus(); }}
-                                                            className="text-base p-0.5 hover:bg-[rgba(0,0,0,0.05)] rounded-full transition-colors"
+                                                            className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
                                                             title="Reply"
                                                         >
                                                             ↩️
@@ -1128,7 +1178,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
                                                             onClick={(e) => { e.stopPropagation(); toggleStar(msg.id); setActiveReactionMessage(null); }}
-                                                            className={`text-base p-0.5 rounded-full transition-colors ${msg.starred ? 'bg-yellow-200' : 'hover:bg-[rgba(0,0,0,0.05)]'}`}
+                                                            className={`text-base p-0.5 rounded-full transition-colors ${msg.starred ? 'bg-yellow-200' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                                                             title={msg.starred ? "Unstar" : "Star"}
                                                         >
                                                             ⭐
@@ -1136,12 +1186,24 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, isMe); }}
+                                                            onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, false); }}
                                                             className="text-base p-0.5 hover:bg-red-100 rounded-full transition-colors"
-                                                            title="Delete"
+                                                            title="Delete for me"
                                                         >
                                                             🗑️
                                                         </motion.button>
+                                                        {isMe && (
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.2 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, true); }}
+                                                                className="text-xs p-0.5 hover:bg-red-100 rounded-full transition-colors"
+                                                                style={{ color: 'var(--error-color)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                                                                title="Delete for everyone"
+                                                            >
+                                                                ✕all
+                                                            </motion.button>
+                                                        )}
                                                     </div>
                                                 </motion.div>
                                             )}
@@ -1163,7 +1225,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="overflow-hidden bg-[var(--bg-color)] border-t border-[rgba(0,0,0,0.05)]"
+                        className="overflow-hidden bg-[var(--bg-color)] border-t border-[rgba(255,255,255,0.08)]"
                     >
                         <div className="grid grid-cols-8 gap-1 p-3 max-h-32 overflow-y-auto">
                             {COMMON_EMOJIS.map((emoji) => (
@@ -1172,7 +1234,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                     whileHover={{ scale: 1.2 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => { setNewMessage(prev => prev + emoji); inputRef.current?.focus(); }}
-                                    className="text-xl p-1 rounded-lg hover:bg-[rgba(0,0,0,0.05)] transition-colors"
+                                    className="text-xl p-1 rounded-lg hover:bg-[rgba(255,255,255,0.08)] transition-colors"
                                 >
                                     {emoji}
                                 </motion.button>
@@ -1190,17 +1252,22 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="overflow-hidden bg-[var(--bg-color)] border-t border-[rgba(0,0,0,0.05)]"
+                        className="overflow-hidden bg-[var(--bg-color)] border-t border-[rgba(255,255,255,0.08)]"
                     >
                         <div className="flex gap-1 px-3 pt-3 overflow-x-auto">
                             {Object.entries(STICKER_PACKS).map(([key, pack]) => (
                                 <button
                                     key={key}
                                     onClick={() => setActiveStickerPack(key)}
-                                    className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition-all ${activeStickerPack === key
-                                        ? "bg-[var(--main-color)] text-white"
-                                        : "bg-[rgba(0,0,0,0.05)] text-[var(--text-color)]"
-                                        }`}
+                                    style={{
+                                        padding: '6px 14px', borderRadius: 'var(--radius-card)',
+                                        fontSize: 14, whiteSpace: 'nowrap',
+                                        background: activeStickerPack === key ? 'var(--main-color)' : 'var(--bg-secondary)',
+                                        color: activeStickerPack === key ? 'var(--bg-color)' : 'var(--text-color)',
+                                        border: '1px solid',
+                                        borderColor: activeStickerPack === key ? 'var(--main-color)' : 'var(--border-color)',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                    }}
                                 >
                                     {pack.emoji}
                                 </button>
@@ -1213,7 +1280,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                     whileHover={{ scale: 1.15 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => sendSticker(sticker)}
-                                    className="text-3xl p-2 rounded-xl hover:bg-[rgba(0,0,0,0.05)] transition-colors"
+                                    className="text-3xl p-2 rounded-xl hover:bg-[rgba(255,255,255,0.08)] transition-colors"
                                 >
                                     {sticker}
                                 </motion.button>
@@ -1221,7 +1288,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         </div>
 
                         {/* Custom Stickers Section */}
-                        <div className="px-3 pb-3 border-t border-[rgba(0,0,0,0.05)] pt-2">
+                        <div className="px-3 pb-3 border-t border-[rgba(255,255,255,0.08)] pt-2">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-xs text-[var(--sub-color)]">Your Stickers</span>
                                 <label className="text-xs text-[var(--main-color)] cursor-pointer hover:underline">
@@ -1265,16 +1332,16 @@ const LiveChat = ({ theme, isPopup = false }) => {
             </AnimatePresence>
 
             {/* Input area */}
-            <form onSubmit={sendMessage} className="p-3 bg-[var(--bg-color)] border-t border-[rgba(0,0,0,0.05)]">
+            <form onSubmit={sendMessage} className="p-3 bg-[var(--bg-color)] border-t border-[rgba(255,255,255,0.08)]">
                 {/* Reply preview */}
                 {replyingTo && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
-                        className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-[rgba(0,0,0,0.05)] border-l-3 border-[var(--main-color)]"
+                        className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-[rgba(255,255,255,0.08)] border-l-3 border-[var(--main-color)]"
                     >
-                        <div className="flex-1 text-xs">
-                            <span className="text-[var(--sub-color)]">Replying to </span>
+                        <div className="flex-1 text-[13px]">
+                            <span className="text-[var(--text-dim)]">Replying to </span>
                             <span className="font-medium text-[var(--text-color)]">
                                 {replyingTo.sender === "haidar" ? "Haidar" : "Princess"}
                             </span>
@@ -1367,7 +1434,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => fileInputRef.current?.click()}
-                            className="p-2.5 rounded-full transition-colors hover:bg-[rgba(0,0,0,0.05)]"
+                            className="p-2.5 rounded-full transition-colors hover:bg-[rgba(255,255,255,0.08)]"
                         >
                             📷
                         </motion.button>
@@ -1376,7 +1443,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => { setShowStickerPicker(!showStickerPicker); setShowEmojiPicker(false); setShowThemePicker(false); }}
-                            className={`p-2.5 rounded-full transition-colors ${showStickerPicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(0,0,0,0.05)]'}`}
+                            className={`p-2.5 rounded-full transition-colors ${showStickerPicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                         >
                             🎭
                         </motion.button>
@@ -1385,7 +1452,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowStickerPicker(false); setShowThemePicker(false); }}
-                            className={`p-2.5 rounded-full transition-colors ${showEmojiPicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(0,0,0,0.05)]'}`}
+                            className={`p-2.5 rounded-full transition-colors ${showEmojiPicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                         >
                             😊
                         </motion.button>
@@ -1397,18 +1464,25 @@ const LiveChat = ({ theme, isPopup = false }) => {
                             onBlur={handleInputBlur}
                             placeholder={replyingTo ? "Reply..." : "Message..."}
                             autoComplete="off"
-                            className="flex-1 px-4 py-2.5 rounded-2xl bg-[rgba(0,0,0,0.05)] text-[var(--text-color)] placeholder-[var(--sub-color)] outline-none focus:ring-2 focus:ring-[var(--main-color)] focus:ring-opacity-50 transition-all text-sm"
-                            style={{ fontSize: '16px' }}
+                            className="flex-1 transition-all"
+                            style={{
+                                padding: '12px 16px', borderRadius: 'var(--radius-card)',
+                                background: 'var(--bg-secondary)', color: 'var(--text-color)',
+                                border: '1px solid var(--border-color)',
+                                outline: 'none', fontSize: 15,
+                                fontFamily: 'var(--font-body)',
+                            }}
                         />
                         {newMessage.trim() ? (
                             <motion.button
                                 type="submit"
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                className="p-2.5 rounded-full font-semibold transition-all"
                                 style={{
-                                    background: `linear-gradient(135deg, ${role === "princess" ? "#ec4899, #db2777" : "#646cff, #5558dd"})`,
-                                    color: "#fff"
+                                    padding: 10, borderRadius: 'var(--radius-card)',
+                                    background: 'var(--main-color)', color: 'var(--bg-color)',
+                                    border: 'none', cursor: 'pointer',
+                                    fontWeight: 600, transition: 'all 0.2s',
                                 }}
                             >
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1421,10 +1495,11 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={startRecording}
-                                className="p-2.5 rounded-full transition-all"
                                 style={{
-                                    background: `linear-gradient(135deg, ${role === "princess" ? "#ec4899, #db2777" : "#646cff, #5558dd"})`,
-                                    color: "#fff"
+                                    padding: 10, borderRadius: 'var(--radius-card)',
+                                    background: 'var(--main-color)', color: 'var(--bg-color)',
+                                    border: 'none', cursor: 'pointer',
+                                    transition: 'all 0.2s',
                                 }}
                             >
                                 🎤
@@ -1453,33 +1528,33 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         transition={{ type: "spring", damping: 25 }}
                         className="absolute inset-0 bg-[var(--bg-color)] z-30 flex flex-col"
                     >
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(0,0,0,0.05)]">
-                            <span className="font-semibold text-[var(--text-color)]">⭐ Starred Messages</span>
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+                            <span className="font-semibold text-[var(--text-color)] text-[16px]">⭐ Starred Messages</span>
                             <button
                                 onClick={() => setShowStarred(false)}
-                                className="p-2 rounded-full hover:bg-[rgba(0,0,0,0.05)]"
+                                className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)]"
                             >
                                 ✕
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-3">
                             {starredMessages.length === 0 ? (
-                                <div className="text-center text-[var(--sub-color)] py-8">
+                                <div className="text-center text-[var(--text-dim)] py-8">
                                     <span className="text-4xl block mb-2">⭐</span>
-                                    <p className="text-sm">No starred messages yet</p>
-                                    <p className="text-xs opacity-60">Tap a message and click ⭐ to save it here</p>
+                                    <p className="text-[15px]">No starred messages yet</p>
+                                    <p className="text-[13px] opacity-60">Tap a message and click ⭐ to save it here</p>
                                 </div>
                             ) : (
                                 starredMessages.map((msg) => (
                                     <div
                                         key={msg.id}
-                                        className="p-3 rounded-xl bg-[rgba(0,0,0,0.03)] border border-[rgba(0,0,0,0.05)]"
+                                        className="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]"
                                     >
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-xs">{msg.sender === "haidar" ? "⭐" : "👸"}</span>
-                                            <span className="text-xs text-[var(--sub-color)]">{formatTime(msg.timestamp)}</span>
+                                            <span className="text-sm">{msg.sender === "haidar" ? "⭐" : "👸"}</span>
+                                            <span className="text-[13px] text-[var(--text-dim)]">{formatTime(msg.timestamp)}</span>
                                         </div>
-                                        {msg.text && <p className="text-sm text-[var(--text-color)]">{msg.text}</p>}
+                                        {msg.text && <p className="text-[15px] text-[var(--text-color)]">{msg.text}</p>}
                                         {msg.sticker && <span className="text-3xl">{typeof msg.sticker === 'string' && msg.sticker.startsWith('data:') ? <img src={msg.sticker} className="w-12 h-12 rounded" /> : msg.sticker}</span>}
                                         {msg.image && <img src={msg.image} className="max-w-[150px] rounded-lg" />}
                                         {msg.voiceMessage && <span className="text-sm">🎤 Voice message</span>}

@@ -1,177 +1,208 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { speakerNames } from "./words";
-import { loadBossModeData } from "./dataLoader";
+import { loadBossMode as loadBossModeData, PLATFORMS } from "./dataLoader";
+import PlatformIcon from "./PlatformIcons";
 
-// Seeded random for sync
 function seededRandom(seed) {
   const x = Math.sin(seed++) * 10000;
   return x - Math.floor(x);
 }
 
+const MIN_PARAGRAPH_LENGTH = 200; // Show long paragraphs (>=200 chars, >=30 words)
+
 export default function BossMode({ otherUsers = {}, session = {}, updateSession }) {
   const [bossIndex, setBossIndex] = useState(0);
   const [bossModeData, setBossModeData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [readCount, setReadCount] = useState(0);
 
-  // Load data on mount
   useEffect(() => {
     loadBossModeData()
       .then(data => {
-        setBossModeData(data || []);
+        const longMessages = (data || []).filter(m => m.text && m.text.length >= MIN_PARAGRAPH_LENGTH);
+        setBossModeData(longMessages);
         setIsLoading(false);
       })
       .catch(err => {
-        console.error('Failed to load boss mode data:', err);
+        console.error('Failed to load paragraph data:', err);
         setIsLoading(false);
       });
   }, []);
 
-  // Get synced boss health from session
-  const bossHealth = session.gameData?.bossHealth ?? 100;
-
-  // Get current boss based on synced seed
-  const currentBoss = useMemo(() => {
+  const currentParagraph = useMemo(() => {
     if (!bossModeData || bossModeData.length === 0) return null;
     const seed = (session.gameData?.bossSeed || Date.now()) + bossIndex;
     const idx = Math.floor(seededRandom(seed) * bossModeData.length);
     return bossModeData[idx];
   }, [session.gameData?.bossSeed, bossIndex, bossModeData]);
 
-  const spawnBoss = () => {
+  const nextParagraph = () => {
     if (updateSession) {
-      updateSession({
-        gameData: {
-          ...session.gameData,
-          bossSeed: Date.now(),
-          bossHealth: 100
-        }
-      });
+      updateSession({ gameData: { ...session.gameData, bossSeed: Date.now() } });
     }
     setBossIndex(i => i + 1);
+    setReadCount(c => c + 1);
   };
 
-  // Attack boss (both players can attack!)
-  const attackBoss = () => {
-    const damage = Math.floor(Math.random() * 20) + 10; // 10-30 damage
-    const newHealth = Math.max(0, bossHealth - damage);
-
-    if (updateSession) {
-      updateSession({
-        gameData: {
-          ...session.gameData,
-          bossHealth: newHealth
-        }
-      });
-    }
-
-    // Auto spawn new boss if defeated
-    if (newHealth <= 0) {
-      setTimeout(() => spawnBoss(), 1500);
-    }
-  };
-
-  // Initial Spawn
   useEffect(() => {
-    if (!session.gameData?.bossSeed && !isLoading && bossModeData.length > 0) spawnBoss();
+    if (!session.gameData?.bossSeed && !isLoading && bossModeData.length > 0) nextParagraph();
   }, [isLoading, bossModeData]);
 
   const formatName = (key) => speakerNames[key] ? speakerNames[key].toLowerCase() : "???";
 
-  // Get partner info
   const partner = Object.values(otherUsers).find(u => u.status === 'boss');
 
   if (isLoading) {
     return (
       <div className="w-full max-w-3xl flex flex-col items-center justify-center min-h-[400px]">
-        <div className="text-[var(--main-color)] text-xl animate-pulse">Loading boss...</div>
+        <div style={{ color: 'var(--main-color)', fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 18 }}>Loading paragraphs...</div>
       </div>
     );
   }
 
-  if (!currentBoss) return <div className="text-center opacity-50 mt-20">No long messages found! Write more essays to each other.</div>;
+  if (!currentParagraph) return (
+    <div style={{
+      textAlign: 'center', marginTop: 80, color: 'var(--sub-color)',
+      fontFamily: 'var(--font-handwritten)', fontSize: 18,
+    }}>
+      No long paragraphs found! Write more essays to each other. 📝
+    </div>
+  );
+
+  const wordCount = currentParagraph.text.split(/\s+/).length;
+  const dateStr = typeof currentParagraph.date === 'object' ? currentParagraph.date?.raw || '' : (currentParagraph.date || '');
 
   return (
-    <div className="w-full max-w-3xl flex flex-col items-center min-h-[400px] md:min-h-[500px] px-4">
-      {/* Partner presence indicator */}
+    <div style={{
+      width: '100%', maxWidth: 760, margin: '0 auto',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      minHeight: 400, padding: '0 20px 80px',
+      fontFamily: 'var(--font-body)',
+    }}>
       {partner && (
-        <div className="flex items-center gap-2 text-sm mb-4">
-          <div
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ backgroundColor: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}
-          />
-          <span style={{ color: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}>
-            {partner.role === 'princess' ? 'She' : 'He'}'s fighting with you! ⚔️
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 14, color: 'var(--text-dim)', marginBottom: 14,
+          fontFamily: 'var(--font-handwritten)',
+        }}>
+          <div className="animate-pulse" style={{
+            width: 7, height: 7, borderRadius: '50%',
+            backgroundColor: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)',
+          }} />
+          <span style={{ color: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)' }}>
+            {partner.role === 'princess' ? 'She' : 'He'}'s reading with you!
           </span>
         </div>
       )}
 
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-[var(--error-color)] uppercase tracking-widest mb-2">👹 BOSS MODE</h2>
-        <p className="text-[var(--sub-color)] text-sm">Co-op! Both players can attack!</p>
+      {/* Title */}
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <h2 style={{
+          fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 400,
+          color: 'var(--main-color)', margin: 0, fontStyle: 'italic',
+        }}>
+          Paragraphs
+        </h2>
+        <p style={{
+          fontSize: 15, color: 'var(--sub-color)', marginTop: 6,
+          fontFamily: 'var(--font-handwritten)',
+        }}>
+          relive your longest messages
+          {readCount > 0 && <span style={{ color: 'var(--main-color)', marginLeft: 8 }}>· {readCount} read</span>}
+        </p>
       </div>
 
-      {/* Boss Health Bar */}
-      <div className="w-full mb-6">
-        <div className="flex justify-between text-sm mb-1">
-          <span className="text-[var(--error-color)] font-bold">BOSS HP</span>
-          <span className="text-[var(--text-color)]">{bossHealth}/100</span>
-        </div>
-        <div className="h-4 bg-[rgba(0,0,0,0.2)] rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-[var(--error-color)] rounded-full"
-            initial={false}
-            animate={{ width: `${bossHealth}%` }}
-            transition={{ duration: 0.3 }}
-          />
-        </div>
-        {bossHealth <= 0 && (
-          <div className="text-center text-[var(--main-color)] font-bold mt-2 text-xl animate-pulse">
-            🎉 BOSS DEFEATED! 🎉
-          </div>
-        )}
-      </div>
-
+      {/* Paragraph container */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={currentBoss.text}
+          key={currentParagraph.text}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 1.05 }}
-          className="bg-[rgba(0,0,0,0.05)] border-2 border-[var(--error-color)] border-opacity-30 p-8 rounded-xl shadow-lg relative w-full"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-card)',
+            padding: 32,
+            boxShadow: '0 4px 16px var(--shadow-color)',
+            position: 'relative', width: '100%',
+            backgroundImage: 'repeating-linear-gradient(transparent, transparent 29px, var(--border-color) 29px, var(--border-color) 30px)',
+            backgroundSize: '100% 30px',
+            backgroundPosition: '0 56px',
+          }}
         >
-          <div className="absolute top-0 left-0 bg-[var(--error-color)] text-[var(--bg-color)] text-xs font-bold px-3 py-1 rounded-br-lg uppercase">
-            Lv. {currentBoss.text.length} Boss
+          {/* Word count badge */}
+          <div style={{
+            position: 'absolute', top: -14, left: 18,
+            background: 'var(--main-color)', color: 'var(--bg-color)',
+            fontSize: 13, fontWeight: 700, padding: '6px 16px',
+            borderRadius: 'var(--radius-card)',
+            fontFamily: 'var(--font-mono)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+          }}>
+            {wordCount} words
           </div>
 
-          <div className="mt-6 mb-6 text-lg leading-loose text-[var(--text-color)] font-medium whitespace-pre-wrap max-h-[400px] overflow-y-auto scrollbar-hide">
-            {currentBoss.text}
+          <div style={{
+            marginTop: 20, marginBottom: 24,
+            fontSize: 17, lineHeight: 1.8,
+            color: 'var(--text-on-card)', fontWeight: 400,
+            whiteSpace: 'pre-wrap',
+            maxHeight: 400, overflowY: 'auto',
+            fontFamily: 'var(--font-body)',
+          }} className="no-scrollbar">
+            {currentParagraph.text}
           </div>
 
-          <div className="flex justify-between items-end border-t border-[var(--sub-color)] border-opacity-20 pt-4">
-            <div className="text-[var(--sub-color)] text-sm">
-              <span className="font-bold text-[var(--main-color)] uppercase">{formatName(currentBoss.speaker)}</span>
-              <span className="opacity-50 mx-2">•</span>
-              <span className="opacity-50">{currentBoss.date || "Unknown Date"}</span>
+          <div className="torn-paper-divider" style={{ margin: '0 0 14px' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-dim-card)' }}>
+              <span style={{
+                fontWeight: 400, color: 'var(--main-color)',
+                fontFamily: 'var(--font-display)', fontStyle: 'italic',
+              }}>
+                {formatName(currentParagraph.speaker)}
+              </span>
+              <span style={{ opacity: 0.3, margin: '0 8px' }}>|</span>
+              <span style={{ opacity: 0.5, fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                {dateStr || "Unknown Date"}
+              </span>
+              {currentParagraph.platform && (
+                <>
+                  <span style={{ opacity: 0.3, margin: '0 8px' }}>|</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
+                    <PlatformIcon platform={currentParagraph.platform} size={13} /> {PLATFORMS[currentParagraph.platform]?.label}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </motion.div>
       </AnimatePresence>
 
-      <div className="flex flex-col md:flex-row gap-3 md:gap-4 mt-6 md:mt-8 w-full md:w-auto">
+      {/* Next button */}
+      <div style={{ marginTop: 28 }}>
         <button
-          onClick={attackBoss}
-          disabled={bossHealth <= 0}
-          className="px-6 md:px-8 py-3 md:py-4 bg-[var(--main-color)] hover:bg-[var(--text-color)] text-[var(--bg-color)] font-bold rounded-lg transition transform hover:scale-105 shadow-xl uppercase tracking-widest disabled:opacity-50 text-sm md:text-base"
+          onClick={nextParagraph}
+          style={{
+            padding: '16px 48px', background: 'var(--main-color)', color: 'var(--bg-color)',
+            border: 'none', borderRadius: 'var(--radius-card)', cursor: 'pointer',
+            fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700,
+            boxShadow: '0 2px 8px var(--shadow-color)', transition: 'all 0.2s',
+          }}
         >
-          ⚔️ Attack! (-10~30 HP)
+          Next Paragraph →
         </button>
-        <button
-          onClick={spawnBoss}
-          className="px-6 md:px-8 py-3 md:py-4 bg-[var(--error-color)] hover:bg-red-600 text-white font-bold rounded-lg transition transform hover:scale-105 shadow-xl uppercase tracking-widest text-sm md:text-base"
-        >
-          🔄 New Boss
-        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{
+        marginTop: 18, fontSize: 13, color: 'var(--sub-color)',
+        fontFamily: 'var(--font-mono)', textAlign: 'center',
+      }}>
+        {bossModeData.length} long paragraphs available (≥{MIN_PARAGRAPH_LENGTH} chars, ≥30 words)
       </div>
     </div>
   );

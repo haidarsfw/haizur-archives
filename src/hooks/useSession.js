@@ -5,10 +5,14 @@ import { generateWords } from "../words";
 
 export const useSession = () => {
   // MODE IS LOCAL ONLY - never synced from Firebase to prevent the bug
-  const [localMode, setLocalMode] = useState("typing");
+  const [localMode, setLocalMode] = useState("home");
+  const lastLocalModeChange = useRef(0); // Suppress Firebase echo after local mode change
+  const [isConnected, setIsConnected] = useState(true);
+  const [partnerModeNotification, setPartnerModeNotification] = useState(null);
 
+  const savedTheme = (() => { try { return localStorage.getItem('haizur-theme') || 'default'; } catch { return 'default'; } })();
   const [session, setSession] = useState({
-    theme: "love",
+    theme: savedTheme,
     timer: 30,
     language: "p1",
     words: generateWords("p1", 100),
@@ -30,6 +34,20 @@ export const useSession = () => {
   useEffect(() => {
     sessionRef.current = fullSession;
   }, [fullSession]);
+
+  // Monitor Firebase connection status
+  useEffect(() => {
+    if (!db) return;
+    try {
+      const connRef = ref(db, '.info/connected');
+      const unsub = onValue(connRef, (snap) => {
+        setIsConnected(!!snap.val());
+      });
+      return () => unsub();
+    } catch (e) {
+      console.log("Connection monitoring error:", e);
+    }
+  }, []);
 
   useEffect(() => {
     // Safety check - if Firebase isn't available, skip
@@ -62,8 +80,11 @@ export const useSession = () => {
 
           // Only sync mode if partner explicitly changed it (via mode field update)
           // This happens after the initial load
-          if (data.mode && data.modeChangedAt && Date.now() - data.modeChangedAt < 5000) {
+          if (data.mode && data.modeChangedAt && Date.now() - data.modeChangedAt < 5000 && Date.now() - lastLocalModeChange.current > 5000) {
             setLocalMode(data.mode);
+            // Show notification that partner switched modes
+            setPartnerModeNotification(data.mode);
+            setTimeout(() => setPartnerModeNotification(null), 3000);
           }
         } catch (e) {
           console.log("Firebase data parse error:", e);
@@ -83,6 +104,7 @@ export const useSession = () => {
 
     // Handle mode update separately (local first, then broadcast)
     if (updates.mode) {
+      lastLocalModeChange.current = Date.now();
       setLocalMode(updates.mode);
 
       // Sync mode to Firebase with timestamp so partner knows it's a fresh change
@@ -154,5 +176,5 @@ export const useSession = () => {
     });
   }, [updateSession]);
 
-  return { session: fullSession, updateSession, startNewGame };
+  return { session: fullSession, updateSession, startNewGame, isConnected, partnerModeNotification };
 };

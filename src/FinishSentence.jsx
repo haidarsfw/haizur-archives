@@ -1,22 +1,21 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { speakerNames } from "./words";
-import { loadRawChatData } from "./dataLoader";
+import { loadRawChatData, PLATFORMS } from "./dataLoader";
+import PlatformIcon from "./PlatformIcons";
 
-// Seeded random for sync
 function seededRandom(seed) {
   const x = Math.sin(seed++) * 10000;
   return x - Math.floor(x);
 }
 
 export default function FinishSentence({ otherUsers = {}, session = {}, updateSession }) {
-  const [gameState, setGameState] = useState("playing"); // playing, correct, wrong
+  const [gameState, setGameState] = useState("playing");
   const [score, setScore] = useState(0);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [rawChatData, setRawChatData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load data on mount
   useEffect(() => {
     loadRawChatData()
       .then(data => {
@@ -29,71 +28,53 @@ export default function FinishSentence({ otherUsers = {}, session = {}, updateSe
       });
   }, []);
 
-  // Use synced seed for same questions
   const seed = session.gameData?.finishSeed || Date.now();
 
   const { question, options } = useMemo(() => {
     if (!rawChatData) return { question: null, options: [] };
-
     const localSeed = seed + questionIndex;
-
-    // Pick a speaker
     const speakerKey = seededRandom(localSeed) > 0.5 ? 'p1' : 'p2';
     const messages = rawChatData[speakerKey];
-
     if (!messages || messages.length === 0) return { question: null, options: [] };
 
-    // Find a "long" message (> 5 words) using seeded random
     let validMsg = null;
     let attempts = 0;
     while (!validMsg && attempts < 50) {
       const idx = Math.floor(seededRandom(localSeed + attempts) * messages.length);
       const r = messages[idx];
-      if (r && r.split(' ').length >= 5) validMsg = r;
+      if (r && r.text.split(' ').length >= 6) validMsg = r;
       attempts++;
     }
-
     if (!validMsg) return { question: null, options: [] };
 
-    // Split it
-    const words = validMsg.split(' ');
-    const cutPoint = Math.floor(words.length * 0.6);
+    const words = validMsg.text.split(' ');
+    const cutPoint = Math.max(2, Math.floor(words.length * 0.6));
     const startText = words.slice(0, cutPoint).join(' ');
     const endText = words.slice(cutPoint).join(' ');
 
-    // Generate Decoys (Wrong answers)
     const decoys = [];
     let decoyAttempt = 0;
     while (decoys.length < 3 && decoyAttempt < 20) {
       const idx = Math.floor(seededRandom(localSeed + 100 + decoyAttempt) * messages.length);
       const r = messages[idx];
       if (r) {
-        const rWords = r.split(' ');
+        const rWords = r.text.split(' ');
         const rEnd = rWords.slice(Math.floor(rWords.length * 0.5)).join(' ');
-        if (rEnd !== endText && rEnd.length > 3 && !decoys.includes(rEnd)) {
-          decoys.push(rEnd);
-        }
+        if (rEnd !== endText && rEnd.length > 3 && !decoys.includes(rEnd)) decoys.push(rEnd);
       }
       decoyAttempt++;
     }
 
-    // Shuffle Options using seeded random
     const allOptions = [...decoys, endText];
     for (let i = allOptions.length - 1; i > 0; i--) {
       const j = Math.floor(seededRandom(localSeed + 200 + i) * (i + 1));
       [allOptions[i], allOptions[j]] = [allOptions[j], allOptions[i]];
     }
 
-    return {
-      question: { speaker: speakerKey, start: startText, answer: endText },
-      options: allOptions
-    };
+    return { question: { speaker: speakerKey, start: startText, answer: endText, platform: validMsg.platform, date: validMsg.date }, options: allOptions };
   }, [seed, questionIndex, rawChatData]);
 
-  const nextQuestion = () => {
-    setQuestionIndex(i => i + 1);
-    setGameState("playing");
-  };
+  const nextQuestion = () => { setQuestionIndex(i => i + 1); setGameState("playing"); };
 
   const handleGuess = (opt) => {
     if (gameState !== "playing") return;
@@ -109,12 +90,7 @@ export default function FinishSentence({ otherUsers = {}, session = {}, updateSe
 
   const newGame = () => {
     if (updateSession) {
-      updateSession({
-        gameData: {
-          ...session.gameData,
-          finishSeed: Date.now()
-        }
-      });
+      updateSession({ gameData: { ...session.gameData, finishSeed: Date.now() } });
     }
     setQuestionIndex(0);
     setScore(0);
@@ -123,7 +99,6 @@ export default function FinishSentence({ otherUsers = {}, session = {}, updateSe
 
   const formatName = (key) => speakerNames[key] ? speakerNames[key].toLowerCase() : "???";
 
-  // Get partner info
   const partner = Object.values(otherUsers).find(u => u.status === 'finish');
 
   if (isLoading) {
@@ -138,62 +113,87 @@ export default function FinishSentence({ otherUsers = {}, session = {}, updateSe
 
   return (
     <div className="w-full max-w-2xl flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px] px-4">
-      {/* Partner presence indicator */}
       {partner && (
         <div className="absolute top-4 right-4 flex items-center gap-2 text-sm">
           <div
             className="w-2 h-2 rounded-full animate-pulse"
-            style={{ backgroundColor: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}
+            style={{ backgroundColor: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)' }}
           />
-          <span style={{ color: partner.role === 'princess' ? '#ff69b4' : '#e2b714' }}>
+          <span style={{ color: partner.role === 'princess' ? 'var(--partner-princess)' : 'var(--partner-prince)' }}>
             {partner.role === 'princess' ? 'She' : 'He'}'s playing too!
           </span>
         </div>
       )}
 
-      <div className="text-[var(--sub-color)] uppercase tracking-widest text-xs font-bold mb-6 md:mb-10 flex flex-wrap gap-2 md:gap-6 items-center justify-center">
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--sub-color)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 28, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', justifyContent: 'center' }}>
         <span>Score: {score}</span>
-        <span>•</span>
-        <span>Finish for <span className="text-[var(--main-color)]">{formatName(question.speaker)}</span></span>
+        <span style={{ opacity: 0.3 }}>|</span>
+        <span>Finish for <span style={{ color: 'var(--main-color)' }}>{formatName(question.speaker)}</span></span>
+        {question.platform && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
+            <PlatformIcon platform={question.platform} size={13} /> {PLATFORMS[question.platform]?.label}
+          </span>
+        )}
         <button
           onClick={newGame}
-          className="px-3 py-1 bg-[var(--sub-color)] hover:bg-[var(--main-color)] text-[var(--bg-color)] rounded transition"
+          style={{ fontSize: 14, padding: '8px 18px', background: 'var(--sub-color)', color: 'var(--bg-color)', border: 'none', borderRadius: 'var(--radius-card)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
         >
-          🔄 New
+          new game
         </button>
       </div>
 
+      {/* Question */}
       <AnimatePresence mode="wait">
         <motion.div
           key={question.start}
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="text-xl md:text-3xl text-center font-medium text-[var(--text-color)] mb-8 md:mb-12 px-2"
+          style={{
+            fontFamily: 'var(--font-mono)', fontSize: 'clamp(18px, 4vw, 26px)',
+            textAlign: 'center', color: 'var(--text-on-card)', marginBottom: 36,
+            padding: '28px 32px',
+            background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-card)',
+            boxShadow: '0 3px 12px var(--shadow-color)',
+            lineHeight: 1.6,
+          }}
         >
           "{question.start}..."
         </motion.div>
       </AnimatePresence>
 
+      {/* Options */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-        {options.map((opt, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleGuess(opt)}
-            disabled={gameState !== "playing"}
-            className={`
-              px-6 py-4 rounded-xl text-lg font-bold transition-all duration-300 text-left truncate
-              ${gameState === "playing" ? "bg-[var(--sub-color)] text-[var(--bg-color)] hover:bg-[var(--text-color)]" : ""}
-              ${gameState !== "playing" && opt === question.answer ? "bg-[var(--main-color)] text-white" : ""}
-              ${gameState === "wrong" && opt !== question.answer ? "opacity-30" : ""}
-            `}
-          >
-            ...{opt}
-          </button>
-        ))}
+        {options.map((opt, idx) => {
+          const rotations = [-1.5, 1.2, -0.8, 1.8];
+          const isCorrect = opt === question.answer;
+          return (
+            <button
+              key={idx}
+              onClick={() => handleGuess(opt)}
+              disabled={gameState !== "playing"}
+              style={{
+                padding: '20px 24px', textAlign: 'left',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--border-color)',
+                background: gameState === 'playing' ? 'var(--bg-card)' : (isCorrect ? 'var(--main-color)' : 'var(--bg-secondary)'),
+                color: gameState !== 'playing' && isCorrect ? 'var(--bg-color)' : (gameState === 'playing' ? 'var(--text-on-card)' : 'var(--text-color)'),
+                fontSize: 17, fontWeight: 500, cursor: gameState === 'playing' ? 'pointer' : 'default',
+                fontFamily: 'var(--font-handwritten)',
+                transform: `rotate(${rotations[idx]}deg)`,
+                transition: 'all 0.3s ease',
+                boxShadow: '0 2px 8px var(--shadow-color)',
+                opacity: gameState === 'wrong' && !isCorrect ? 0.3 : 1,
+              }}
+            >
+              ...{opt}
+            </button>
+          );
+        })}
       </div>
 
       <div className="h-8 mt-8 font-bold text-xl">
-        {gameState === "correct" && <span className="text-[var(--main-color)]">Correct!</span>}
-        {gameState === "wrong" && <span className="text-[var(--error-color)]">Wrong! It was "...{question.answer}"</span>}
+        {gameState === "correct" && <span className="animate-stamp-press" style={{ color: 'var(--success-color)', fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 22 }}>Correct!</span>}
+        {gameState === "wrong" && <span style={{ color: 'var(--error-color)', fontFamily: 'var(--font-handwritten)', fontSize: 20 }}>Wrong! It was "...{question.answer}"</span>}
       </div>
     </div>
   );

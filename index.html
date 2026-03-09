@@ -1,37 +1,85 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <!-- iOS Safari specific -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="format-detection" content="telephone=no" />
-    <title>haizur type's</title>
-    <style>
-      /* Fallback loading state */
-      #root:empty::after {
-        content: 'Loading...';
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        color: #e2b714;
-        font-family: 'Roboto Mono', monospace;
-        font-size: 1.5rem;
-        background: #323437;
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23a0522d'/><circle cx='50' cy='50' r='44' fill='%23c4724a'/><text x='50' y='58' text-anchor='middle' dominant-baseline='middle' font-family='serif' font-style='italic' font-size='42' fill='%23f5e6d0'>hz</text></svg>" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>haizur archives</title>
+  <meta name="description"
+    content="346,794 messages across 6 platforms. Every conversation preserved." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="haizur" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="theme-color" content="#1c1410" />
+  <meta property="og:title" content="haizur archives" />
+  <meta property="og:description" content="346,794 messages. 6 platforms. 409 days. Every word preserved." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    html { background: var(--loading-bg, #1c1410); }
+    #root:empty {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      height: 100dvh;
+      background: var(--loading-bg, #1c1410);
+      font-family: 'DM Serif Display', serif;
+    }
+    #root:empty::after {
+      content: 'haizur';
+      font-size: 2.5rem;
+      font-weight: 400;
+      font-style: italic;
+      letter-spacing: -0.01em;
+      color: var(--loading-color, #d4a054);
+      opacity: 0.6;
+      animation: breathe 2s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+  <script>
+    // Apply saved theme colors to loading screen
+    try {
+      var themeColors = {
+        default: { bg: '#1c1410', color: '#d4a054' },
+        milktea: { bg: '#f5ede3', color: '#b8956a' },
+        romantic: { bg: '#2a1a20', color: '#e895a0' },
+        night: { bg: '#0d1117', color: '#7aa2f7' },
+        matrix: { bg: '#0a0a0a', color: '#00ff41' },
+        pinky: { bg: '#2a1a24', color: '#ff8fb0' },
+        ocean: { bg: '#0d1b2a', color: '#5ba8cc' },
+        sunset: { bg: '#1a1210', color: '#e08050' },
+        coffee: { bg: '#1a150f', color: '#c4956a' },
+      };
+      var saved = localStorage.getItem('haizur-theme');
+      if (saved && themeColors[saved]) {
+        document.documentElement.style.setProperty('--loading-bg', themeColors[saved].bg);
+        document.documentElement.style.setProperty('--loading-color', themeColors[saved].color);
       }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-    <noscript>
-      <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#323437;color:#e2b714;font-family:monospace;font-size:1.5rem;">
-        Please enable JavaScript to use this app.
-      </div>
-    </noscript>
-  </body>
+    } catch(e) {}
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+  <noscript>
+    <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#1c1410;color:#d4a054;font-family:'DM Serif Display',serif;font-size:1.2rem;">
+      Please enable JavaScript
+    </div>
+  </noscript>
+</body>
+
 </html>

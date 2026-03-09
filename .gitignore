@@ -23,3 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+.env
+.env.local
+.env.*.local
+public/media/
+.env*.local
+.1code/
