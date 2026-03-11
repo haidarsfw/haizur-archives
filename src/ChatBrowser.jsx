@@ -141,7 +141,7 @@ function VirtualizedGrid({ displayed, filtered, contentType }) {
 }
 
 
-export default function ChatBrowser({ theme, initialTarget, initialTargetState, clearTargetState, savedState, currentRole }) {
+export default function ChatBrowser({ theme, initialTarget, initialTargetState, clearTargetState, savedState, currentRole, isMobile }) {
     const [allMessages, setAllMessages] = useState([]);
     const [displayed, setDisplayed] = useState([]);
     const [platform, setPlatform] = useState('all');
@@ -160,6 +160,7 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
     const [sortOrder, setSortOrder] = useState('oldest'); // 'oldest', 'newest'
     const [highlightedIdx, setHighlightedIdx] = useState(null);
     const [navError, setNavError] = useState(null);
+    const [showMobileFilters, setShowMobileFilters] = useState(false);
     const scrollRef = useRef(null);
     const loadMoreRef = useRef(null);
     const searchInputRef = useRef(null);
@@ -759,6 +760,13 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
         return msg.speaker === 'p1'; // default: haidar = p1 = right
     };
 
+    const activeFilterCount = [
+        contentType !== 'all',
+        speakerFilter !== 'all',
+        sortOrder !== 'oldest',
+        !!selectedDate,
+    ].filter(Boolean).length;
+
     return (
         <div style={{
             width: '100%', maxWidth: 'var(--width-content)', margin: '0 auto',
@@ -767,7 +775,7 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
         }}>
             {/* Platform Tabs — Horizontal scrollable with counts */}
             <div role="tablist" aria-label="Platform filter" style={{
-                display: 'flex', gap: 8, padding: '10px 16px',
+                display: 'flex', gap: isMobile ? 6 : 8, padding: isMobile ? '6px 10px' : '10px 16px',
                 overflowX: 'auto', flexShrink: 0,
                 WebkitOverflowScrolling: 'touch',
             }} className="no-scrollbar">
@@ -781,19 +789,19 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
                             aria-selected={isActive}
                             onClick={() => handlePlatformChange(tab.id)}
                             style={{
-                                padding: '10px 18px',
+                                padding: isMobile ? '6px 10px' : '10px 18px',
                                 borderRadius: 'var(--radius-full)',
                                 border: '1px solid',
                                 borderColor: isActive ? 'var(--main-color)' : 'var(--border-color)',
                                 background: isActive ? 'var(--main-color-dim)' : 'transparent',
                                 color: isActive ? 'var(--main-color)' : 'var(--text-dim)',
-                                fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap',
+                                fontSize: isMobile ? 12 : 14, fontWeight: 500, whiteSpace: 'nowrap',
                                 cursor: 'pointer', transition: 'all 0.2s',
                                 fontFamily: 'var(--font-body)',
                                 display: 'flex', alignItems: 'center', gap: 6,
                             }}
                         >
-                            {iconPlatform ? <PlatformIcon platform={iconPlatform} size={16} /> : <span>💬</span>}
+                            {iconPlatform ? <PlatformIcon platform={iconPlatform} size={isMobile ? 14 : 16} /> : <span>💬</span>}
                             <span>{tab.label}</span>
                             {platformCounts[tab.id] > 0 && (
                                 <span style={{
@@ -817,7 +825,7 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
                 if (!activeTab?.subTabs) return null;
                 return (
                     <div role="tablist" aria-label="Sub-platform filter" style={{
-                        display: 'flex', gap: 6, padding: '0 16px 8px',
+                        display: 'flex', gap: 6, padding: isMobile ? '0 12px 6px' : '0 16px 8px',
                         overflowX: 'auto', flexShrink: 0,
                     }} className="no-scrollbar">
                         {activeTab.subTabs.map(sub => {
@@ -860,48 +868,21 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
                 );
             })()}
 
-            {/* Content Type Tabs — Photos, Videos, etc */}
-            <div role="tablist" aria-label="Content type filter" style={{
-                display: 'flex', gap: 6, padding: '4px 16px 8px',
-                overflowX: 'auto', flexShrink: 0,
-            }} className="no-scrollbar">
-                {CONTENT_TABS.map(tab => (
-                    <button
-                        key={tab.id}
-                        role="tab"
-                        aria-selected={contentType === tab.id}
-                        onClick={() => setContentType(tab.id)}
-                        style={{
-                            padding: '6px 14px', borderRadius: 'var(--radius-full)',
-                            border: 'none',
-                            background: contentType === tab.id ? 'var(--main-color)' : 'var(--bg-tertiary)',
-                            color: contentType === tab.id ? 'var(--bg-color)' : 'var(--text-dim)',
-                            fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
-                            cursor: 'pointer', transition: 'all 0.2s',
-                            fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                        }}
-                    >
-                        {tab.icon} {tab.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* Search + Filters Row */}
+            {/* Search + Filter Toggle Row — always visible */}
             <div style={{
-                display: 'flex', gap: 8, padding: '6px 16px', flexShrink: 0,
-                alignItems: 'center', flexWrap: 'wrap',
+                display: 'flex', gap: 8, padding: isMobile ? '6px 12px' : '6px 16px', flexShrink: 0,
+                alignItems: 'center',
             }}>
                 {/* Search */}
-                <div style={{ flex: 1, position: 'relative', minWidth: 180 }}>
+                <div style={{ flex: 1, position: 'relative', minWidth: isMobile ? 0 : 180 }}>
                     <input
                         ref={searchInputRef}
                         type="text"
                         value={searchInput}
                         onChange={e => setSearchInput(e.target.value)}
-                        placeholder="Search messages... (Ctrl+F)"
+                        placeholder={isMobile ? "Search messages..." : "Search messages... (Ctrl+F)"}
                         style={{
-                            width: '100%', padding: '10px 14px 10px 36px',
+                            width: '100%', padding: isMobile ? '8px 12px 8px 32px' : '10px 14px 10px 36px',
                             borderRadius: 0,
                             border: 'none',
                             borderBottom: '1.5px solid var(--sub-color)',
@@ -912,115 +893,211 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
                         }}
                     />
                     <span style={{
-                        position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-                        fontSize: 14, opacity: 0.4,
+                        position: 'absolute', left: isMobile ? 8 : 10, top: '50%', transform: 'translateY(-50%)',
+                        fontSize: isMobile ? 13 : 14, opacity: 0.4,
                     }}>🔍</span>
                 </div>
 
-                {/* Speaker filter */}
-                <div style={{ display: 'flex', gap: 4 }}>
-                    {[
-                        { id: 'all', label: 'Both' },
-                        { id: 'p1', label: SPEAKERS.p1?.name || 'P1' },
-                        { id: 'p2', label: SPEAKERS.p2?.name || 'P2' },
-                    ].map(s => (
-                        <button
-                            key={s.id}
-                            onClick={() => setSpeakerFilter(s.id)}
-                            style={{
-                                padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                                border: '1px solid',
-                                borderColor: speakerFilter === s.id ? 'var(--main-color)' : 'var(--border-color)',
-                                background: speakerFilter === s.id ? 'var(--main-color-dim)' : 'transparent',
-                                color: speakerFilter === s.id ? 'var(--main-color)' : 'var(--text-dim)',
-                                fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                                fontFamily: 'var(--font-body)',
-                            }}
-                        >
-                            {s.label}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Sort toggle */}
-                <button
-                    onClick={() => setSortOrder(s => s === 'oldest' ? 'newest' : 'oldest')}
-                    style={{
-                        padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                        border: '1px solid var(--border-color)',
-                        background: 'transparent', color: 'var(--text-dim)',
-                        fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                    }}
-                >
-                    {sortOrder === 'oldest' ? '↑ Oldest' : '↓ Newest'}
-                </button>
-
-                {/* Date picker */}
-                <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={handleDateChange}
-                    min={dateRange.min}
-                    max={dateRange.max}
-                    style={{
-                        padding: '8px 10px',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-color)',
-                        background: 'var(--bg-card)',
-                        color: 'var(--text-on-card)',
-                        fontSize: 13, outline: 'none',
-                        fontFamily: 'var(--font-body)',
-                        width: 130,
-                    }}
-                />
-                {selectedDate && (
+                {/* Filter toggle — mobile only */}
+                {isMobile && (
                     <button
-                        onClick={() => setSelectedDate('')}
+                        onClick={() => setShowMobileFilters(f => !f)}
                         style={{
-                            padding: '6px 12px', borderRadius: 'var(--radius-md)',
-                            background: 'var(--error-color)', color: '#fff',
-                            border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                            padding: '6px 12px', borderRadius: 'var(--radius-full)',
+                            border: '1px solid',
+                            borderColor: activeFilterCount > 0 ? 'var(--main-color)' : 'var(--border-color)',
+                            background: activeFilterCount > 0 ? 'var(--main-color-dim)' : 'transparent',
+                            color: activeFilterCount > 0 ? 'var(--main-color)' : 'var(--text-dim)',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            fontFamily: 'var(--font-mono)',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            whiteSpace: 'nowrap', flexShrink: 0,
                         }}
                     >
-                        ✕
+                        Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
+                        <span style={{ fontSize: 9 }}>{showMobileFilters ? '▲' : '▼'}</span>
                     </button>
                 )}
             </div>
 
-            {/* Quick Jump Buttons */}
-            <div style={{
-                display: 'flex', gap: 8, padding: '4px 16px 8px',
-                alignItems: 'center', flexShrink: 0,
-            }}>
-                <span style={{ fontSize: 12, color: 'var(--sub-color)', fontFamily: 'var(--font-mono)' }}>Jump:</span>
-                <button onClick={jumpToFirst} style={quickJumpStyle}>First msg</button>
-                <button onClick={jumpToLast} style={quickJumpStyle}>Last msg</button>
-                <button onClick={jumpToRandom} style={quickJumpStyle}>🎲 Random</button>
-                {/* Results count */}
+            {/* Mobile compact message count — shown when filters collapsed */}
+            {isMobile && !showMobileFilters && (
                 <div style={{
-                    marginLeft: 'auto', fontSize: 13, color: 'var(--sub-color)',
-                    fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '2px 12px 6px', flexShrink: 0,
                 }}>
-                    {searchInput && searchInput !== debouncedSearch ? (
-                        <span style={{ color: 'var(--main-color)' }}>Searching...</span>
-                    ) : (
-                        <>
-                            {filtered.length.toLocaleString()} {debouncedSearch ? 'results' : 'messages'}
-                            {allMessages.length > 0 && filtered.length !== allMessages.length && !debouncedSearch && (
-                                <span style={{ opacity: 0.5 }}> / {allMessages.length.toLocaleString()}</span>
-                            )}
-                            {debouncedSearch && ` for "${debouncedSearch}"`}
-                        </>
+                    <div style={{
+                        fontSize: 12, color: 'var(--sub-color)',
+                        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                    }}>
+                        {searchInput && searchInput !== debouncedSearch ? (
+                            <span style={{ color: 'var(--main-color)' }}>Searching...</span>
+                        ) : (
+                            <>
+                                {filtered.length.toLocaleString()} {debouncedSearch ? 'results' : 'messages'}
+                                {debouncedSearch && ` for "${debouncedSearch}"`}
+                            </>
+                        )}
+                    </div>
+                    {activeFilterCount > 0 && (
+                        <button
+                            onClick={() => { setContentType('all'); setSpeakerFilter('all'); setSortOrder('oldest'); setSelectedDate(''); }}
+                            style={{
+                                padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                                border: 'none', background: 'var(--error-color)', color: '#fff',
+                                fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                                fontFamily: 'var(--font-mono)',
+                            }}
+                        >
+                            Clear filters
+                        </button>
                     )}
                 </div>
-            </div>
+            )}
+
+            {/* Collapsible filter section — always visible on desktop, toggle on mobile */}
+            {(!isMobile || showMobileFilters) && (
+                <>
+                    {/* Content Type Tabs — Photos, Videos, etc */}
+                    <div role="tablist" aria-label="Content type filter" style={{
+                        display: 'flex', gap: 6, padding: isMobile ? '4px 12px 8px' : '4px 16px 8px',
+                        overflowX: 'auto', flexShrink: 0,
+                    }} className="no-scrollbar">
+                        {CONTENT_TABS.map(tab => (
+                            <button
+                                key={tab.id}
+                                role="tab"
+                                aria-selected={contentType === tab.id}
+                                onClick={() => setContentType(tab.id)}
+                                style={{
+                                    padding: isMobile ? '5px 10px' : '6px 14px', borderRadius: 'var(--radius-full)',
+                                    border: 'none',
+                                    background: contentType === tab.id ? 'var(--main-color)' : 'var(--bg-tertiary)',
+                                    color: contentType === tab.id ? 'var(--bg-color)' : 'var(--text-dim)',
+                                    fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+                                    cursor: 'pointer', transition: 'all 0.2s',
+                                    fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+                                    letterSpacing: '0.04em',
+                                }}
+                            >
+                                {tab.icon} {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Speaker + Sort + Date Row */}
+                    <div style={{
+                        display: 'flex', gap: 8, padding: isMobile ? '4px 12px' : '4px 16px', flexShrink: 0,
+                        alignItems: 'center', flexWrap: 'wrap',
+                    }}>
+                        {/* Speaker filter */}
+                        <div style={{ display: 'flex', gap: 4 }}>
+                            {[
+                                { id: 'all', label: 'Both' },
+                                { id: 'p1', label: SPEAKERS.p1?.name || 'P1' },
+                                { id: 'p2', label: SPEAKERS.p2?.name || 'P2' },
+                            ].map(s => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => setSpeakerFilter(s.id)}
+                                    style={{
+                                        padding: isMobile ? '5px 10px' : '6px 12px', borderRadius: 'var(--radius-full)',
+                                        border: '1px solid',
+                                        borderColor: speakerFilter === s.id ? 'var(--main-color)' : 'var(--border-color)',
+                                        background: speakerFilter === s.id ? 'var(--main-color-dim)' : 'transparent',
+                                        color: speakerFilter === s.id ? 'var(--main-color)' : 'var(--text-dim)',
+                                        fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                                        fontFamily: 'var(--font-body)',
+                                    }}
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Sort toggle */}
+                        <button
+                            onClick={() => setSortOrder(s => s === 'oldest' ? 'newest' : 'oldest')}
+                            style={{
+                                padding: isMobile ? '5px 10px' : '6px 12px', borderRadius: 'var(--radius-full)',
+                                border: '1px solid var(--border-color)',
+                                background: 'transparent', color: 'var(--text-dim)',
+                                fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-mono)',
+                            }}
+                        >
+                            {sortOrder === 'oldest' ? '↑ Oldest' : '↓ Newest'}
+                        </button>
+
+                        {/* Date picker */}
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={handleDateChange}
+                            min={dateRange.min}
+                            max={dateRange.max}
+                            style={{
+                                padding: isMobile ? '6px 8px' : '8px 10px',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--text-on-card)',
+                                fontSize: isMobile ? 12 : 13, outline: 'none',
+                                fontFamily: 'var(--font-body)',
+                                width: isMobile ? 115 : 130,
+                            }}
+                        />
+                        {selectedDate && (
+                            <button
+                                onClick={() => setSelectedDate('')}
+                                style={{
+                                    padding: '6px 12px', borderRadius: 'var(--radius-md)',
+                                    background: 'var(--error-color)', color: '#fff',
+                                    border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                                }}
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Quick Jump Buttons */}
+                    <div style={{
+                        display: 'flex', gap: isMobile ? 6 : 8, padding: isMobile ? '4px 12px 6px' : '4px 16px 8px',
+                        alignItems: 'center', flexShrink: 0, flexWrap: isMobile ? 'wrap' : 'nowrap',
+                    }}>
+                        <span style={{ fontSize: 12, color: 'var(--sub-color)', fontFamily: 'var(--font-mono)' }}>Jump:</span>
+                        <button onClick={jumpToFirst} style={quickJumpStyle}>First msg</button>
+                        <button onClick={jumpToLast} style={quickJumpStyle}>Last msg</button>
+                        <button onClick={jumpToRandom} style={quickJumpStyle}>🎲 Random</button>
+                        {/* Results count */}
+                        <div style={{
+                            marginLeft: isMobile ? 0 : 'auto',
+                            width: isMobile ? '100%' : 'auto',
+                            fontSize: 13, color: 'var(--sub-color)',
+                            fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                        }}>
+                            {searchInput && searchInput !== debouncedSearch ? (
+                                <span style={{ color: 'var(--main-color)' }}>Searching...</span>
+                            ) : (
+                                <>
+                                    {filtered.length.toLocaleString()} {debouncedSearch ? 'results' : 'messages'}
+                                    {allMessages.length > 0 && filtered.length !== allMessages.length && !debouncedSearch && (
+                                        <span style={{ opacity: 0.5 }}> / {allMessages.length.toLocaleString()}</span>
+                                    )}
+                                    {debouncedSearch && ` for "${debouncedSearch}"`}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Main Content Area */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* Chat Messages */}
                 <div
                     ref={scrollRef}
-                    style={{ flex: 1, overflowY: 'auto', padding: '0 16px 80px' }}
+                    style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '0 10px 80px' : '0 16px 80px' }}
                 >
                     {displayed.length === 0 && (
                         <div style={{
@@ -1123,8 +1200,8 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
                                             <div
                                                 onClick={isFilteredView ? () => handleSearchResultClick(msg) : undefined}
                                                 style={{
-                                                maxWidth: '80%',
-                                                padding: '12px 18px',
+                                                maxWidth: isMobile ? '85%' : '80%',
+                                                padding: isMobile ? '10px 14px' : '12px 18px',
                                                 borderRadius: 'var(--radius-card)',
                                                 background: isMine ? 'var(--bg-card)' : 'var(--bg-secondary)',
                                                 color: isMine ? 'var(--text-on-card)' : 'var(--text-color)',
@@ -1169,8 +1246,8 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
                     )}
                 </div>
 
-                {/* Month Jump Sidebar */}
-                {monthLabels.length > 0 && contentType === 'all' && (
+                {/* Month Jump Sidebar — hidden on mobile */}
+                {!isMobile && monthLabels.length > 0 && contentType === 'all' && (
                     <div style={{
                         width: 40, flexShrink: 0, overflowY: 'auto', overflowX: 'hidden',
                         display: 'flex', flexDirection: 'column', gap: 0,

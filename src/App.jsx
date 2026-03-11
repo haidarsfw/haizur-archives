@@ -602,7 +602,7 @@ export default function App({ currentRole, onSwitchRole }) {
                 transition={{ duration: visitedModes.current.has(activeGame) ? 0.05 : 0.25, ease: 'easeOut' }}
                 className={`w-full flex flex-col items-center ${activeGame === 'sky' ? 'flex-grow' : 'justify-center flex-grow'}`}
               >
-                {activeGame === 'home' && <HomeScreen onNavigate={switchGameGlobal} theme={theme} currentUser={currentRole} partnerPresence={partnerPresence} onSwitchRole={onSwitchRole} skipMotion={skipMotion} />}
+                {activeGame === 'home' && <HomeScreen onNavigate={switchGameGlobal} theme={theme} currentUser={currentRole} partnerPresence={partnerPresence} onSwitchRole={onSwitchRole} skipMotion={skipMotion} isMobile={isMobile} />}
                 {activeGame === 'typing' && <TypingGame engine={engine} uiOpacity={isMenuOpen ? 0 : 1} isFocused={isFocused} otherUsers={otherUsers} session={session} handleKey={engine.handleKey} isMobile={isMobile} />}
                 {activeGame !== 'home' && activeGame !== 'typing' && (
                   <ModeErrorBoundary key={activeGame} mode={activeGame} onGoHome={() => switchGameGlobal('home')}>
@@ -615,7 +615,7 @@ export default function App({ currentRole, onSwitchRole }) {
                     {activeGame === 'boss' && <BossMode otherUsers={otherUsers} session={session} updateSession={updateSession} />}
                     {activeGame === 'letters' && <LoveLetters otherUsers={otherUsers} />}
                     {activeGame === 'time-capsule' && <TimeCapsule theme={theme} />}
-                    {activeGame === 'chat-browser' && <ChatBrowser theme={theme} initialTarget={browseTarget} initialTargetState={browseTargetState} clearTargetState={() => setBrowseTargetState(null)} savedState={chatBrowserState} currentRole={currentRole} />}
+                    {activeGame === 'chat-browser' && <ChatBrowser theme={theme} initialTarget={browseTarget} initialTargetState={browseTargetState} clearTargetState={() => setBrowseTargetState(null)} savedState={chatBrowserState} currentRole={currentRole} isMobile={isMobile} />}
                     {activeGame === 'museum' && <Museum theme={theme} />}
                     {activeGame === 'platform-quiz' && <PlatformQuiz theme={theme} />}
                     {activeGame === 'emoji-decoder' && <EmojiDecoder theme={theme} />}
@@ -638,7 +638,7 @@ export default function App({ currentRole, onSwitchRole }) {
         animate={{ scale: 1 }}
         whileHover={{ scale: 1.08, y: -2 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-5 left-5 z-40 w-12 h-12 rounded-full flex items-center justify-center"
+        className="fixed bottom-4 left-4 md:bottom-5 md:left-5 z-40 w-9 h-9 md:w-12 md:h-12 rounded-full flex items-center justify-center"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
@@ -646,7 +646,7 @@ export default function App({ currentRole, onSwitchRole }) {
         }}
         aria-label="Change theme"
       >
-        <span style={{ fontSize: 20 }}>🎨</span>
+        <span style={{ fontSize: isMobile ? 15 : 20 }}>🎨</span>
       </motion.button>
 
       {/* Theme Switcher Popup */}
@@ -658,7 +658,7 @@ export default function App({ currentRole, onSwitchRole }) {
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="fixed bottom-20 left-5 z-50"
+              className="fixed bottom-14 left-4 md:bottom-20 md:left-5 z-50"
               style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
@@ -720,14 +720,14 @@ export default function App({ currentRole, onSwitchRole }) {
         whileHover={{ scale: 1.08, y: -2 }}
         whileTap={{ scale: 0.95 }}
         aria-label="Open chat"
-        className="fixed bottom-5 right-5 z-40 w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center"
+        className="fixed bottom-4 right-4 z-40 w-11 h-11 md:w-16 md:h-16 rounded-full flex items-center justify-center"
         style={{
           background: 'radial-gradient(circle at 35% 35%, var(--main-color), var(--wax-seal-color, var(--main-color)))',
           boxShadow: 'inset 0 -2px 6px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.1), 0 4px 16px rgba(212, 160, 84, 0.3)',
           border: '1px solid rgba(255,255,255,0.08)'
         }}
       >
-        <span className="text-xl md:text-2xl" style={{ color: 'var(--bg-color)', textShadow: '0 1px 2px rgba(0,0,0,0.3)', fontFamily: 'var(--font-display)', fontWeight: 400 }}>
+        <span className="text-base md:text-2xl" style={{ color: 'var(--bg-color)', textShadow: '0 1px 2px rgba(0,0,0,0.3)', fontFamily: 'var(--font-display)', fontWeight: 400 }}>
           💬
         </span>
       </motion.button>

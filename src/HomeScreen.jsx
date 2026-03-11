@@ -355,7 +355,7 @@ function OnThisDayPreview({ historyByDate, onNavigate, skipMotion }) {
     );
 }
 
-export default function HomeScreen({ onNavigate, theme, currentUser, partnerPresence, onSwitchRole, skipMotion }) {
+export default function HomeScreen({ onNavigate, theme, currentUser, partnerPresence, onSwitchRole, skipMotion, isMobile }) {
     const [stats, setStats] = useState(null);
     const [historyByDate, setHistoryByDate] = useState(null);
     const [randomQuote, setRandomQuote] = useState(null);
@@ -440,11 +440,11 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
     return (
         <div style={{
             width: '100%', maxWidth: 'var(--width-home)', margin: '0 auto',
-            padding: '0 24px 100px', minHeight: '100dvh',
+            padding: isMobile ? '0 14px 80px' : '0 24px 100px', minHeight: '100dvh',
         }}>
             {/* --- HERO --- */}
             <div style={{
-                minHeight: '85vh', display: 'flex', flexDirection: 'column',
+                minHeight: isMobile ? '70vh' : '85vh', display: 'flex', flexDirection: 'column',
                 justifyContent: 'center', alignItems: 'center', textAlign: 'center',
                 position: 'relative',
             }}>
@@ -481,7 +481,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                         animate={{ opacity: 1, scale: 1 }}
                         transition={skipMotion ? { duration: 0 } : { duration: 0.6, delay: 0.1 }}
                         className="wax-seal animate-gentle-bob"
-                        style={{ margin: '0 auto 20px', width: 72, height: 72, fontSize: 18, letterSpacing: '-0.05em' }}
+                        style={{ margin: isMobile ? '0 auto 14px' : '0 auto 20px', width: isMobile ? 56 : 72, height: isMobile ? 56 : 72, fontSize: isMobile ? 15 : 18, letterSpacing: '-0.05em' }}
                     >
                         hz
                     </motion.div>
@@ -514,7 +514,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                             fontWeight: 400,
                             letterSpacing: '0.25em',
                             color: 'var(--main-color)',
-                            marginTop: 12,
+                            marginTop: isMobile ? 8 : 12,
                             textTransform: 'uppercase',
                         }}
                     >
@@ -529,7 +529,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                     transition={skipMotion ? { duration: 0 } : { duration: 0.6, delay: 1.1 }}
                     style={{
                         height: 1, background: 'var(--main-color)', opacity: 0.3,
-                        marginTop: 32, marginBottom: 32,
+                        marginTop: isMobile ? 20 : 32, marginBottom: isMobile ? 20 : 32,
                     }}
                 />
 
@@ -540,8 +540,8 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                         animate={{ opacity: 1 }}
                         transition={skipMotion ? { duration: 0 } : { delay: 1.3, duration: 0.8 }}
                         style={{
-                            display: 'flex', gap: 20, justifyContent: 'center',
-                            marginBottom: 36, flexWrap: 'wrap',
+                            display: 'flex', gap: isMobile ? 12 : 20, justifyContent: 'center',
+                            marginBottom: isMobile ? 24 : 36, flexWrap: 'wrap',
                         }}
                     >
                         {[
@@ -553,20 +553,20 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                             <div key={stat.label} className="tape-top" style={{
                                 textAlign: 'center',
                                 background: 'var(--bg-card)',
-                                padding: '24px 28px 10px',
-                                border: '6px solid var(--bg-card)',
-                                borderBottomWidth: 28,
+                                padding: isMobile ? '16px 18px 8px' : '24px 28px 10px',
+                                border: `${isMobile ? 4 : 6}px solid var(--bg-card)`,
+                                borderBottomWidth: isMobile ? 18 : 28,
                                 boxShadow: '0 3px 12px var(--shadow-color)',
                                 transform: `rotate(${stat.rotation}deg)`,
                             }}>
                                 <div style={{
-                                    fontSize: 36, fontWeight: 400, color: 'var(--text-on-card)',
+                                    fontSize: isMobile ? 26 : 36, fontWeight: 400, color: 'var(--text-on-card)',
                                     fontFamily: 'var(--font-display)',
                                 }}>
                                     <AnimatedNumber value={stat.value} delay={1400 + i * 200} skipMotion={skipMotion} />
                                 </div>
                                 <div style={{
-                                    fontSize: 16, color: 'var(--text-dim-card)',
+                                    fontSize: isMobile ? 13 : 16, color: 'var(--text-dim-card)',
                                     fontFamily: 'var(--font-handwritten)', marginTop: 4,
                                     transform: 'rotate(-1deg)',
                                 }}>
@@ -584,7 +584,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                         animate={{ opacity: 1 }}
                         transition={skipMotion ? { duration: 0 } : { delay: 1.6, duration: 0.6 }}
                         style={{
-                            display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center',
+                            display: 'flex', gap: isMobile ? 10 : 16, flexWrap: 'wrap', justifyContent: 'center',
                         }}
                     >
                         {Object.entries(stats.byPlatform).filter(([, v]) => v.total > 0).map(([platform, data]) => (
@@ -632,7 +632,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                     className="lined-paper"
                     onClick={() => onNavigate('chat-browser', { date: randomQuote.date, text: randomQuote.text, speaker: randomQuote.speaker, time: randomQuote.time, platform: randomQuote.platform, timestamp: randomQuote.timestamp })}
                     style={{
-                        padding: '36px 28px 36px 52px', marginBottom: 40,
+                        padding: isMobile ? '24px 18px 24px 36px' : '36px 28px 36px 52px', marginBottom: isMobile ? 28 : 40,
                         background: 'var(--bg-card)',
                         borderRadius: 'var(--radius-card)',
                         boxShadow: '0 3px 12px var(--shadow-warm)',
@@ -641,7 +641,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                     }}
                 >
                     <p style={{
-                        margin: 0, fontSize: 22, lineHeight: '30px',
+                        margin: 0, fontSize: isMobile ? 17 : 22, lineHeight: isMobile ? '26px' : '30px',
                         color: 'var(--text-on-card)',
                         fontFamily: 'var(--font-handwritten)', fontWeight: 400,
                     }}>
