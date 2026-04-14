@@ -203,7 +203,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
     const updateTypingStatus = useCallback(async (isTyping) => {
         if (!role) return;
         try {
-            await update(re$(db, $'typing-status/{role}'), {
+            await update(ref(db, `typing-status/${role}`), {
                 isTyping,
                 updatedAt: Date.now()
             });
