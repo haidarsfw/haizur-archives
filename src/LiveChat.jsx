@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { db } from "./firebase";
 import { ref, push, set, update, onValue, query, orderByChild, limitToLast, serverTimestamp, get } from "firebase/database";
 import AudioCall from "./AudioCall";
 
