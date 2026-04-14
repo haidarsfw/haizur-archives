@@ -141,6 +141,17 @@ const LiveChat = ({ theme, isPopup = false }) => {
         setConnectionStatus("connecting");
         setError(null);
 
+        // Fallback timeout to catch infinite hang on live domains due to API restrictions
+        const timeoutId = setTimeout(() => {
+            setConnectionStatus((prev) => {
+                if (prev === "connecting") {
+                    setError("Connection trapped! Please check your Google Cloud API Key HTTP Referrer restrictions or Vercel Environment Variables.");
+                    return "error";
+                }
+                return prev;
+            });
+        }, 10000);
+
         const q = query(
             collection(firestore, "chat-messages"),
             orderBy("timestamp", "asc"),
@@ -149,6 +160,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
 
         const unsubscribe = onSnapshot(q,
             (snapshot) => {
+                clearTimeout(timeoutId);
                 setConnectionStatus("connected");
                 const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
