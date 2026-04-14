@@ -1,7 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { db } from "./firebase";
-import { ref, push, set, update, onValue, query, orderByChild, limitToLast, serverTimestamp, get } from "firebase/database";
+import { firestore } from "./firebase";
+import {
+    collection,
+    addDoc,
+    query,
+    orderBy,
+    onSnapshot,
+    serverTimestamp,
+    limit,
+    doc,
+    updateDoc,
+    arrayUnion,
+    arrayRemove,
+    deleteDoc,
+    setDoc,
+    getDoc
+} from "firebase/firestore";
 import AudioCall from "./AudioCall";
 
 // Chat theme presets
@@ -23,13 +38,13 @@ const STICKER_PACKS = {
     food: { emoji: "🍕", stickers: ["🍕", "🍔", "🍟", "🍦", "🍩", "🍪", "🧁", "🍰", "🍫", "☕", "🧋", "🍜"] }
 };
 
-const QuickReactions = ["❤️", "😂", "😮", "😢", "🔥", "👍"];
+const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"];
 const COMMON_EMOJIS = ["😀", "😂", "🥰", "😍", "😘", "🥺", "😭", "😤", "🔥", "✨", "💕", "❤️", "💖", "💗", "👍", "👏", "🙌", "🤗", "😱", "😴", "😋", "🎉", "💀", "👀", "🥱", "🤔", "🤭", "😈", "🙄", "💯", "🫶", "✌️"];
 
-const LiveChat = ({ theme, isPopup = false, currentRole }) => {
+const LiveChat = ({ theme, isPopup = false }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
-    const [role, setRole] = useState(currentRole || null);
+    const [role, setRole] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [connectionStatus, setConnectionStatus] = useState("connecting");
     const [chatTheme, setChatTheme] = useState("default");
@@ -92,16 +107,10 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
 
     // Load saved settings
     useEffect(() => {
-        if (currentRole && currentRole !== role) {
-            setRole(currentRole);
-            localStorage.setItem("haizur-chat-role", currentRole);
-        } else if (!role) {
-            const savedRole = localStorage.getItem("haizur-chat-role");
-            if (savedRole) setRole(savedRole);
-        }
-        
+        const savedRole = localStorage.getItem("haizur-chat-role");
         const savedTheme = localStorage.getItem("haizur-chat-theme");
         const savedSound = localStorage.getItem("haizur-chat-sound");
+        if (savedRole) setRole(savedRole);
         if (savedTheme && CHAT_THEMES[savedTheme]) setChatTheme(savedTheme);
         if (savedSound !== null) setSoundEnabled(savedSound === "true");
         setIsLoading(false);
@@ -133,19 +142,15 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         setError(null);
 
         const q = query(
-            ref(db, "presence/chat-messages"),
-            orderByChild("timestamp"),
-            limitToLast(500)
+            collection(firestore, "chat-messages"),
+            orderBy("timestamp", "asc"),
+            limit(500)
         );
 
-        let timeoutId;
-        const unsubscribe = onValue(q,
+        const unsubscribe = onSnapshot(q,
             (snapshot) => {
-                clearTimeout(timeoutId);
                 setConnectionStatus("connected");
-                const data = snapshot.val() || {};
-                const msgs = Object.keys(data).map(key => ({ id: key, ...data[key] }))
-                    .sort((a,b) => (a.timestamp || 0) - (b.timestamp || 0));
+                const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                 // Check for new messages from partner
                 if (msgs.length > lastMessageCountRef.current && lastMessageCountRef.current > 0) {
@@ -160,25 +165,18 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
                 setMessages(msgs);
             },
             (err) => {
-                clearTimeout(timeoutId);
                 console.error("Firestore error:", err);
-                setConnectionStatus("error");
-                setError("Connection failed. Please wait.");
+                if (err.message && err.message.includes("permission_denied") || err.code === "permission-denied") {
+                    setConnectionStatus("error");
+                    setError("Firestore Rules Expired! Please update your Firebase Console rules to allow read/write.");
+                } else {
+                    setConnectionStatus("error");
+                    setError("Database error. Check console.");
+                }
             }
         );
 
-        // Fallback timeout to un-stick "connecting..." if Firestore is not reachable
-        timeoutId = setTimeout(() => {
-            if (connectionStatus === "connecting") {
-                setConnectionStatus("error");
-                setError("Server unreachable. Messages may not be loading.");
-            }
-        }, 10000);
-
-        return () => {
-            clearTimeout(timeoutId);
-            unsubscribe();
-        };
+        return () => unsubscribe();
     }, [role, showNotification, playSound]);
 
     // Auto-scroll
@@ -205,10 +203,10 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
     const updateTypingStatus = useCallback(async (isTyping) => {
         if (!role) return;
         try {
-            await update(ref(db, `presence/typing-status/${role}`), {
+            await setDoc(doc(firestore, "typing-status", role), {
                 isTyping,
                 updatedAt: Date.now()
-            });
+            }, { merge: true });
         } catch (e) {
             console.log("Typing status update failed - check Firebase rules for typing-status collection");
         }
@@ -220,8 +218,8 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         const otherRole = role === "haidar" ? "princess" : "haidar";
 
         // Real-time listener
-        const unsub = onValue(ref(db, `presence/typing-status/${otherRole}`), (snap) => {
-            const data = snap.val();
+        const unsub = onSnapshot(doc(firestore, "typing-status", otherRole), (snap) => {
+            const data = snap.data();
             if (data && data.isTyping && Date.now() - data.updatedAt < 5000) {
                 setOtherTyping(true);
             } else {
@@ -271,13 +269,13 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         if (!role || !messages.length) return;
 
         const unreadMessages = messages.filter(m =>
-            m.sender !== role && !m.readBy?.[role]
+            m.sender !== role && !m.readBy?.includes(role)
         );
 
         for (const msg of unreadMessages.slice(-10)) { // Mark last 10 unread
             try {
-                await update(ref(db, `presence/chat-messages/${msg.id}/readBy`), {
-                    [role]: true
+                await updateDoc(doc(firestore, "chat-messages", msg.id), {
+                    readBy: arrayUnion(role)
                 });
             } catch (e) {
                 console.log("Read receipt update failed:", e);
@@ -309,13 +307,12 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         updateTypingStatus(false);
 
         try {
-            const newRef = push(ref(db, "presence/chat-messages"));
-            await set(newRef, {
+            await addDoc(collection(firestore, "chat-messages"), {
                 text,
                 sender: role,
                 timestamp: serverTimestamp(),
                 reactions: [],
-                readBy: { [role]: true },
+                readBy: [role],
                 ...(reply && {
                     replyTo: {
                         id: reply.id,
@@ -337,7 +334,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         try {
             if (forEveryone) {
                 // Mark as deleted for everyone (show indicator)
-                await update(ref(db, `presence/chat-messages/${messageId}`), {
+                await updateDoc(doc(firestore, "chat-messages", messageId), {
                     deletedForEveryone: true,
                     text: null,
                     sticker: null,
@@ -346,8 +343,8 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
                 });
             } else {
                 // Just hide for self (mark as deleted)
-                await update(ref(db, `presence/chat-messages/${messageId}/deletedFor`), {
-                    [role]: true
+                await updateDoc(doc(firestore, "chat-messages", messageId), {
+                    deletedFor: arrayUnion(role)
                 });
             }
             setActiveReactionMessage(null);
@@ -368,8 +365,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         if (!role) return;
         setShowStickerPicker(false);
         try {
-            const newRef = push(ref(db, "presence/chat-messages"));
-            await set(newRef, {
+            await addDoc(collection(firestore, "chat-messages"), {
                 sticker,
                 sender: role,
                 timestamp: serverTimestamp(),
@@ -403,8 +399,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
                 reader.onloadend = async () => {
                     const base64Audio = reader.result;
                     try {
-                        const newRef = push(ref(db, "presence/chat-messages"));
-            await set(newRef, {
+                        await addDoc(collection(firestore, "chat-messages"), {
                             voiceMessage: base64Audio,
                             voiceDuration: recordingTime,
                             sender: role,
@@ -495,15 +490,13 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
 
         try {
             const msg = messages.find(m => m.id === messageId);
-            const reactions = msg?.reactions || {};
-            const existingReactionKey = Object.keys(reactions).find(k => reactions[k].emoji === emoji && reactions[k].user === role);
-            const msgRef = ref(db, `presence/chat-messages/${messageId}/reactions`);
+            const existingReaction = msg?.reactions?.find(r => r.emoji === emoji && r.user === role);
+            const ref = doc(firestore, "chat-messages", messageId);
 
-            if (existingReactionKey) {
-                await update(msgRef, { [existingReactionKey]: null });
+            if (existingReaction) {
+                await updateDoc(ref, { reactions: arrayRemove({ emoji, user: role }) });
             } else {
-                const newReactionRef = push(msgRef);
-                await set(newReactionRef, { emoji, user: role });
+                await updateDoc(ref, { reactions: arrayUnion({ emoji, user: role }) });
             }
         } catch (err) {
             console.error("Reaction error:", err);
@@ -515,8 +508,8 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         if (!messageId) return;
         try {
             const msg = messages.find(m => m.id === messageId);
-            const msgRef = ref(db, `presence/chat-messages/${messageId}`);
-            await update(msgRef, { starred: !msg?.starred });
+            const ref = doc(firestore, "chat-messages", messageId);
+            await updateDoc(ref, { starred: !msg?.starred });
         } catch (err) {
             console.error("Star error:", err);
         }
@@ -613,8 +606,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         setSendingImage(true);
 
         try {
-            const newRef = push(ref(db, "presence/chat-messages"));
-            await set(newRef, {
+            await addDoc(collection(firestore, "chat-messages"), {
                 image: imagePreview,
                 sender: role,
                 timestamp: serverTimestamp(),
@@ -655,7 +647,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
 
     // Filter deleted messages and group
     const visibleMessages = filteredMessages.filter(m =>
-        !m.deletedFor?.[role]
+        !m.deletedFor?.includes(role)
     );
 
     const groupedMessages = visibleMessages.reduce((acc, msg) => {
@@ -980,7 +972,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
                         {msgs.map((msg, idx) => {
                             const isMe = msg.sender === role;
                             const bubbleColor = isMe ? currentTheme.myBubble : currentTheme.theirBubble;
-                            const reactions = msg.reactions ? Object.values(msg.reactions) : [];
+                            const reactions = msg.reactions || [];
                             const isSticker = !!msg.sticker;
                             const isCustomSticker = isSticker && typeof msg.sticker === 'string' && msg.sticker.startsWith('data:');
                             const isVoice = !!msg.voiceMessage;
