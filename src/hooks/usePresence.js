@@ -17,9 +17,12 @@ export function usePresence(role) {
 
         // Set online
         const goOnline = () => {
+            // First read existing data to preserve lastLogin if recently logged in, 
+            // or we just set it now.
             set(myPresenceRef, {
                 online: true,
                 lastSeen: Date.now(),
+                lastLogin: Date.now(), // Update login time
                 role,
             });
         };

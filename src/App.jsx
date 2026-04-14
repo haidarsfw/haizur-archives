@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, Suspense } from "react";
 import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useEngine } from "./hooks/useEngine";
-import { useMultiplayer } from "./hooks/useMultiplayer";
 import { useSession } from "./hooks/useSession";
 import { speakerNames } from "./words";
 import { SPEAKERS, releaseCache } from "./dataLoader";
@@ -398,11 +397,6 @@ export default function App({ currentRole, onSwitchRole }) {
     engine.setTimerDuration(session.timer);
   }, [session.language, session.timer]);
 
-  const otherUsers = useMultiplayer(activeGame, {
-    progress: engine.typed.length,
-    wpm: engine.wpm
-  });
-
   const visitedModes = useRef(new Set());
   const [skipMotion, setSkipMotion] = useState(false);
 
@@ -541,7 +535,7 @@ export default function App({ currentRole, onSwitchRole }) {
       <div className="grain-overlay" />
       <div className="paper-fibers" />
       <FloatingParticles theme={theme} />
-      <LiveCursor users={otherUsers} />
+      <LiveCursor partnerPresence={partnerPresence} currentRole={currentRole} />
 
       <AnimatePresence>
         {isMenuOpen && (
@@ -773,7 +767,9 @@ export default function App({ currentRole, onSwitchRole }) {
                   ✕
                 </motion.button>
               </div>
-              <LiveChat theme={theme} isPopup={true} />
+              <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-[var(--main-color)] border-t-transparent rounded-full" /></div>}>
+                <LiveChat theme={theme} isPopup={true} />
+              </Suspense>
             </motion.div>
           </motion.div>
         )}
