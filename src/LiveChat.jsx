@@ -133,7 +133,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         setError(null);
 
         const q = query(
-            ref(db, "chat-messages"),
+            ref(db, "presence/chat-messages"),
             orderByChild("timestamp"),
             limitToLast(500)
         );
@@ -205,7 +205,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
     const updateTypingStatus = useCallback(async (isTyping) => {
         if (!role) return;
         try {
-            await update(ref(db, `typing-status/${role}`), {
+            await update(ref(db, `presence/typing-status/${role}`), {
                 isTyping,
                 updatedAt: Date.now()
             });
@@ -220,7 +220,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         const otherRole = role === "haidar" ? "princess" : "haidar";
 
         // Real-time listener
-        const unsub = onValue(ref(db, `typing-status/${otherRole}`), (snap) => {
+        const unsub = onValue(ref(db, `presence/typing-status/${otherRole}`), (snap) => {
             const data = snap.val();
             if (data && data.isTyping && Date.now() - data.updatedAt < 5000) {
                 setOtherTyping(true);
@@ -276,7 +276,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
 
         for (const msg of unreadMessages.slice(-10)) { // Mark last 10 unread
             try {
-                await update(ref(db, `chat-messages/${msg.id}/readBy`), {
+                await update(ref(db, `presence/chat-messages/${msg.id}/readBy`), {
                     [role]: true
                 });
             } catch (e) {
@@ -309,7 +309,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         updateTypingStatus(false);
 
         try {
-            const newRef = push(ref(db, "chat-messages"));
+            const newRef = push(ref(db, "presence/chat-messages"));
             await set(newRef, {
                 text,
                 sender: role,
@@ -337,7 +337,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         try {
             if (forEveryone) {
                 // Mark as deleted for everyone (show indicator)
-                await update(ref(db, `chat-messages/${messageId}`), {
+                await update(ref(db, `presence/chat-messages/${messageId}`), {
                     deletedForEveryone: true,
                     text: null,
                     sticker: null,
@@ -346,7 +346,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
                 });
             } else {
                 // Just hide for self (mark as deleted)
-                await update(ref(db, `chat-messages/${messageId}/deletedFor`), {
+                await update(ref(db, `presence/chat-messages/${messageId}/deletedFor`), {
                     [role]: true
                 });
             }
@@ -368,7 +368,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         if (!role) return;
         setShowStickerPicker(false);
         try {
-            const newRef = push(ref(db, "chat-messages"));
+            const newRef = push(ref(db, "presence/chat-messages"));
             await set(newRef, {
                 sticker,
                 sender: role,
@@ -403,7 +403,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
                 reader.onloadend = async () => {
                     const base64Audio = reader.result;
                     try {
-                        const newRef = push(ref(db, "chat-messages"));
+                        const newRef = push(ref(db, "presence/chat-messages"));
             await set(newRef, {
                             voiceMessage: base64Audio,
                             voiceDuration: recordingTime,
@@ -497,7 +497,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
             const msg = messages.find(m => m.id === messageId);
             const reactions = msg?.reactions || {};
             const existingReactionKey = Object.keys(reactions).find(k => reactions[k].emoji === emoji && reactions[k].user === role);
-            const msgRef = ref(db, `chat-messages/${messageId}/reactions`);
+            const msgRef = ref(db, `presence/chat-messages/${messageId}/reactions`);
 
             if (existingReactionKey) {
                 await update(msgRef, { [existingReactionKey]: null });
@@ -515,7 +515,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         if (!messageId) return;
         try {
             const msg = messages.find(m => m.id === messageId);
-            const msgRef = ref(db, `chat-messages/${messageId}`);
+            const msgRef = ref(db, `presence/chat-messages/${messageId}`);
             await update(msgRef, { starred: !msg?.starred });
         } catch (err) {
             console.error("Star error:", err);
@@ -613,7 +613,7 @@ const LiveChat = ({ theme, isPopup = false, currentRole }) => {
         setSendingImage(true);
 
         try {
-            const newRef = push(ref(db, "chat-messages"));
+            const newRef = push(ref(db, "presence/chat-messages"));
             await set(newRef, {
                 image: imagePreview,
                 sender: role,

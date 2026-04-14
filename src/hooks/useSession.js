@@ -57,7 +57,7 @@ export const useSession = () => {
     }
 
     try {
-      const dbRef = ref(db, 'session_v1');
+      const dbRef = ref(db, 'presence/session_v1');
 
       const unsubscribe = onValue(dbRef, (snapshot) => {
         try {
@@ -110,7 +110,7 @@ export const useSession = () => {
       // Sync mode to Firebase with timestamp so partner knows it's a fresh change
       if (db) {
         try {
-          const dbRef = ref(db, 'session_v1');
+          const dbRef = ref(db, 'presence/session_v1');
           const newSession = {
             ...currentSession,
             ...updates,
@@ -159,7 +159,7 @@ export const useSession = () => {
     // Sync to Firebase
     if (db) {
       try {
-        const dbRef = ref(db, 'session_v1');
+        const dbRef = ref(db, 'presence/session_v1');
         set(dbRef, { ...newSessionData, mode: localMode }).catch(console.error);
       } catch (e) {
         console.log("Firebase sync error:", e);
