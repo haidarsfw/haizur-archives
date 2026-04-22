@@ -1,5 +1,5 @@
 public/media/
 .1code/
 plans/
-scripts/
+scripts/*
 !scripts/generateVersion.cjs
