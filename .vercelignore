@@ -2,3 +2,4 @@ public/media/
 .1code/
 plans/
 scripts/
+!scripts/generateVersion.cjs
