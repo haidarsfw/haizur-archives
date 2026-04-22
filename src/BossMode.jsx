@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { speakerNames } from "./words";
+import { speakerNames } from "./speakers";
 import { loadBossMode as loadBossModeData, PLATFORMS } from "./dataLoader";
 import PlatformIcon from "./PlatformIcons";
 

@@ -770,7 +770,7 @@ export default function ChatBrowser({ theme, initialTarget, initialTargetState, 
     return (
         <div style={{
             width: '100%', maxWidth: 'var(--width-content)', margin: '0 auto',
-            display: 'flex', flexDirection: 'column', height: 'calc(100vh - 80px)',
+            display: 'flex', flexDirection: 'column', height: 'calc(var(--viewport-height, 100vh) - 80px)',
             fontFamily: 'var(--font-body)',
         }}>
             {/* Platform Tabs — Horizontal scrollable with counts */}

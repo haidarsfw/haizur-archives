@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { speakerNames } from "./words";
+import { speakerNames } from "./speakers";
 import { loadFullHistory, PLATFORMS } from "./dataLoader";
 import PlatformIcon from "./PlatformIcons";
 

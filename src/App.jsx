@@ -3,14 +3,19 @@ import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useEngine } from "./hooks/useEngine";
 import { useSession } from "./hooks/useSession";
-import { speakerNames } from "./words";
+import { speakerNames } from "./speakers";
 import { SPEAKERS, releaseCache } from "./dataLoader";
+import { firestore } from "./firebase";
+import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 
 // Eagerly loaded (needed immediately)
 import HomeScreen from "./HomeScreen";
 import FloatingParticles from "./FloatingParticles";
 import LiveCursor from "./LiveCursor";
 import { usePresence, formatLastSeen } from "./hooks/usePresence";
+import { useSounds } from "./hooks/useSounds";
+import { useVersionCheck } from "./hooks/useVersionCheck";
+import WhatsNewModal from "./WhatsNewModal";
 
 // Lazy loaded (loaded on first visit)
 const Quiz = React.lazy(() => import("./Quiz"));
@@ -379,6 +384,11 @@ export default function App({ currentRole, onSwitchRole }) {
   const activeGame = session.mode;
   const theme = session.theme;
   const partnerPresence = usePresence(currentRole);
+  const sounds = useSounds();
+  const { notes: versionNotes, showWhatsNew, dismiss: dismissWhatsNew } = useVersionCheck();
+  // Realtime multiplayer is disabled in this build — keep an empty record so
+  // the typing race UI can safely render without other users present.
+  const otherUsers = {};
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -397,12 +407,19 @@ export default function App({ currentRole, onSwitchRole }) {
     engine.setTimerDuration(session.timer);
   }, [session.language, session.timer]);
 
+  // Sound cues for the typing test lifecycle.
+  useEffect(() => {
+    if (engine.state === 'run') sounds.play('typingTestStart');
+    else if (engine.state === 'finish') sounds.play('typingTestFinish');
+  }, [engine.state, sounds]);
+
   const visitedModes = useRef(new Set());
   const [skipMotion, setSkipMotion] = useState(false);
 
   const switchGameGlobal = (mode, context) => {
     // Idempotency guard: don't switch to the same mode unless we have a navigation context
     if (mode === activeGame && !context) return;
+    sounds.play('modeChange');
     // Save current scroll position before switching
     scrollPositions.current[activeGame] = window.scrollY;
     if (context) {
@@ -455,8 +472,12 @@ export default function App({ currentRole, onSwitchRole }) {
 
   const switchThemeGlobal = (t) => {
     updateSession({ theme: t });
+    sounds.play('themeSwitch');
     try { localStorage.setItem('haizur-theme', t); } catch (e) { }
   };
+
+  const openMenu = () => { sounds.play('menuOpen'); setIsMenuOpen(true); };
+  const closeMenu = () => { sounds.play('menuClose'); setIsMenuOpen(false); };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -529,17 +550,49 @@ export default function App({ currentRole, onSwitchRole }) {
     return () => { window.removeEventListener("blur", onBlur); window.removeEventListener("focus", onFocus); };
   }, []);
 
+  // Global chat listener — powers the unread badge on the FAB and plays a
+  // receive sound even when the chat modal is closed.
+  const [unreadCount, setUnreadCount] = useState(0);
+  const isChatOpenRef = useRef(false);
+  const soundsRef = useRef(sounds);
+  useEffect(() => { soundsRef.current = sounds; }, [sounds]);
+  useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
+  useEffect(() => {
+    try {
+      const storedChatRole = (() => { try { return localStorage.getItem('haizur-chat-role'); } catch { return null; } })();
+      const chatRole = storedChatRole || (currentRole === 'haidar' ? 'haidar' : 'princess');
+      const seenCountRef = { current: 0 };
+      const q = query(collection(firestore, 'chat-messages'), orderBy('timestamp', 'desc'), limit(60));
+      const unsub = onSnapshot(q, (snap) => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const unread = docs.filter(m => m.sender !== chatRole && !(m.readBy || []).includes(chatRole)).length;
+        setUnreadCount(unread);
+        // Fresh partner message while chat closed → play a receive cue.
+        if (seenCountRef.current > 0 && snap.size > seenCountRef.current) {
+          const newest = docs[0];
+          if (newest && newest.sender !== chatRole && !isChatOpenRef.current) {
+            soundsRef.current?.play('messageReceive');
+          }
+        }
+        seenCountRef.current = snap.size;
+      }, () => { /* swallow — likely Firebase rules or offline */ });
+      return () => unsub();
+    } catch (e) {
+      console.log('Chat listener setup failed:', e?.message || e);
+    }
+  }, [currentRole]);
+
   return (
     <div className={`w-full flex flex-col items-center transition-colors duration-500 relative min-h-screen ${activeGame === 'typing' ? 'overflow-hidden' : 'overflow-y-auto'}`} data-theme={theme} style={{ backgroundColor: 'var(--bg-color)', fontFamily: 'var(--font-body)' }} onClick={() => setIsFocused(true)}>
 
       <div className="grain-overlay" />
       <div className="paper-fibers" />
       <FloatingParticles theme={theme} />
-      <LiveCursor partnerPresence={partnerPresence} currentRole={currentRole} />
+      <LiveCursor partnerPresence={partnerPresence} currentRole={currentRole} isMobile={isMobile} />
 
       <AnimatePresence>
         {isMenuOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-[rgba(0,0,0,0.85)] backdrop-blur-md flex items-center justify-center" onClick={() => setIsMenuOpen(false)}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[rgba(0,0,0,0.85)] backdrop-blur-md flex items-center justify-center" onClick={closeMenu}>
             <motion.div initial={{ scale: 0.9, rotate: -1 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-lg h-[70vh] overflow-y-auto shadow-2xl" style={{ borderRadius: 'var(--radius-card)', background: 'var(--bg-card)', border: '1px solid var(--border-color)', backgroundImage: 'repeating-linear-gradient(transparent, transparent 29px, var(--sub-color) 29px, var(--sub-color) 30px)', backgroundPosition: '0 8px', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
               {/* Red margin line */}
               <div style={{ position: 'absolute', left: 44, top: 0, bottom: 0, width: 1, background: 'rgba(180, 60, 60, 0.15)', pointerEvents: 'none' }} />
@@ -557,6 +610,16 @@ export default function App({ currentRole, onSwitchRole }) {
                 <div className="flex flex-wrap gap-3 mb-8">
                   {[{ id: 'default', label: 'Mahogany', emoji: '🪵' }, { id: 'milktea', label: 'Milktea', emoji: '🧋' }, { id: 'romantic', label: 'Cherry Blossom', emoji: '🌸' }, { id: 'night', label: 'Midnight', emoji: '🌙' }, { id: 'matrix', label: 'Terminal', emoji: '💻' }, { id: 'pinky', label: 'Pinky Cute', emoji: '🎀' }, { id: 'ocean', label: 'Ocean Breeze', emoji: '🌊' }, { id: 'sunset', label: 'Sunset Diary', emoji: '🌅' }, { id: 'coffee', label: 'Coffee Journal', emoji: '☕' }].map(t => <button key={t.id} onClick={() => switchThemeGlobal(t.id)} style={{ padding: '10px 20px', borderRadius: 'var(--radius-card)', border: `1.5px solid ${theme === t.id ? 'var(--main-color)' : 'var(--border-color)'}`, background: theme === t.id ? 'var(--main-color-dim)' : 'transparent', color: theme === t.id ? 'var(--main-color)' : 'var(--text-dim-card)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 14, transition: 'all 0.2s' }}>{t.emoji} {t.label}</button>)}
                 </div>
+                <div style={{ fontFamily: 'var(--font-handwritten)', fontSize: 18, color: 'var(--text-dim-card)', marginBottom: 10, transform: 'rotate(-0.3deg)' }}>sound</div>
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <button
+                    onClick={() => { sounds.setEnabled(!sounds.enabled); if (!sounds.enabled) sounds.play('toggle'); }}
+                    aria-pressed={sounds.enabled}
+                    style={{ padding: '10px 20px', borderRadius: 'var(--radius-card)', border: `1.5px solid ${sounds.enabled ? 'var(--main-color)' : 'var(--border-color)'}`, background: sounds.enabled ? 'var(--main-color-dim)' : 'transparent', color: sounds.enabled ? 'var(--main-color)' : 'var(--text-dim-card)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 14 }}
+                  >
+                    {sounds.enabled ? '🔔 sounds on' : '🔕 sounds off'}
+                  </button>
+                </div>
               </div>
               {/* Torn paper bottom edge */}
               <div style={{ position: 'absolute', bottom: -1, left: 0, right: 0, height: 8, background: 'var(--bg-card)', clipPath: 'polygon(0% 50%, 2% 0%, 5% 60%, 8% 10%, 12% 80%, 15% 20%, 18% 70%, 22% 5%, 25% 50%, 28% 15%, 32% 65%, 35% 0%, 38% 55%, 42% 10%, 45% 70%, 48% 20%, 52% 80%, 55% 5%, 58% 60%, 62% 15%, 65% 75%, 68% 0%, 72% 55%, 75% 20%, 78% 70%, 82% 10%, 85% 60%, 88% 0%, 92% 50%, 95% 15%, 98% 65%, 100% 0%, 100% 100%, 0% 100%)', pointerEvents: 'none' }} />
@@ -572,7 +635,7 @@ export default function App({ currentRole, onSwitchRole }) {
             <button onClick={() => switchGameGlobal('home')} className="text-[var(--sub-color)] hover:text-[var(--main-color)] transition" title="Back to Home" aria-label="Back to Home">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></svg>
             </button>
-            <button onClick={() => setIsMenuOpen(true)} className="text-[var(--sub-color)] hover:text-[var(--text-color)] transition" aria-label="Open menu"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
+            <button onClick={openMenu} className="text-[var(--sub-color)] hover:text-[var(--text-color)] transition" aria-label="Open menu" aria-expanded={isMenuOpen}><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 22, letterSpacing: '-0.01em', fontStyle: 'italic', color: 'var(--text-color)' }}>haizur</div>
           </div>
           <div className="flex items-center gap-3">
@@ -632,15 +695,17 @@ export default function App({ currentRole, onSwitchRole }) {
         animate={{ scale: 1 }}
         whileHover={{ scale: 1.08, y: -2 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-4 left-4 md:bottom-5 md:left-5 z-40 w-9 h-9 md:w-12 md:h-12 rounded-full flex items-center justify-center"
+        className="fixed bottom-4 left-4 z-40 w-11 h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
           boxShadow: '0 4px 16px var(--shadow-color)',
         }}
         aria-label="Change theme"
+        aria-expanded={isThemeOpen}
+        aria-controls="theme-popup"
       >
-        <span style={{ fontSize: isMobile ? 15 : 20 }}>🎨</span>
+        <span style={{ fontSize: isMobile ? 18 : 20 }}>🎨</span>
       </motion.button>
 
       {/* Theme Switcher Popup */}
@@ -652,7 +717,8 @@ export default function App({ currentRole, onSwitchRole }) {
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="fixed bottom-14 left-4 md:bottom-20 md:left-5 z-50"
+              id="theme-popup"
+              className="fixed bottom-16 left-4 md:bottom-20 md:left-5 z-50"
               style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
@@ -713,7 +779,7 @@ export default function App({ currentRole, onSwitchRole }) {
         animate={{ scale: 1 }}
         whileHover={{ scale: 1.08, y: -2 }}
         whileTap={{ scale: 0.95 }}
-        aria-label="Open chat"
+        aria-label={unreadCount > 0 ? `Open chat (${unreadCount} unread)` : "Open chat"}
         className="fixed bottom-4 right-4 z-40 w-11 h-11 md:w-16 md:h-16 rounded-full flex items-center justify-center"
         style={{
           background: 'radial-gradient(circle at 35% 35%, var(--main-color), var(--wax-seal-color, var(--main-color)))',
@@ -724,6 +790,29 @@ export default function App({ currentRole, onSwitchRole }) {
         <span className="text-base md:text-2xl" style={{ color: 'var(--bg-color)', textShadow: '0 1px 2px rgba(0,0,0,0.3)', fontFamily: 'var(--font-display)', fontWeight: 400 }}>
           💬
         </span>
+        {unreadCount > 0 && !isChatOpen && (
+          <motion.span
+            key={unreadCount}
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            style={{
+              position: 'absolute', top: -4, right: -4,
+              minWidth: 20, height: 20,
+              padding: '0 5px',
+              borderRadius: 999,
+              background: 'var(--error-color, #ef4444)',
+              color: '#fff',
+              fontSize: 11, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '2px solid var(--bg-color)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+              fontFamily: 'var(--font-mono)',
+            }}
+            aria-hidden
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </motion.span>
+        )}
       </motion.button>
 
       {/* Chat Popup Overlay */}
@@ -768,7 +857,7 @@ export default function App({ currentRole, onSwitchRole }) {
                 </motion.button>
               </div>
               <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-[var(--main-color)] border-t-transparent rounded-full" /></div>}>
-                <LiveChat theme={theme} isPopup={true} />
+                <LiveChat theme={theme} isPopup={true} partnerPresence={partnerPresence} />
               </Suspense>
             </motion.div>
           </motion.div>
@@ -780,6 +869,8 @@ export default function App({ currentRole, onSwitchRole }) {
           <div className="flex gap-8 hide-on-mobile"><div className="flex items-center gap-2"><span className="bg-[var(--sub-color)] text-[var(--bg-color)] px-2 py-0.5 rounded text-xs font-bold">tab</span> restart</div><div className="flex items-center gap-2"><span className="bg-[var(--sub-color)] text-[var(--bg-color)] px-2 py-0.5 rounded text-xs font-bold">esc</span> menu</div><div className="flex items-center gap-2"><span className="bg-[var(--sub-color)] text-[var(--bg-color)] px-2 py-0.5 rounded text-xs font-bold">?</span> help</div></div>
         </div>
       )}
+
+      <WhatsNewModal notes={versionNotes} open={showWhatsNew} onDismiss={dismissWhatsNew} />
 
       {/* Partner mode switch toast */}
       <AnimatePresence>

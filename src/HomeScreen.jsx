@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { loadStats, loadHistoryByDateStandalone as loadHistoryByDate, releaseCache, PLATFORMS, SPEAKERS } from './dataLoader';
-import { formatLastSeen } from './hooks/usePresence';
 import PlatformIcon, { SecondaryBadge } from './PlatformIcons';
 
 // IG account mapping: speakerRaw -> { handle, isSecondary }
@@ -448,27 +447,9 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                 justifyContent: 'center', alignItems: 'center', textAlign: 'center',
                 position: 'relative',
             }}>
-                {/* Partner presence */}
-                {partnerPresence && (
-                    <motion.div
-                        initial={skipMotion ? false : { opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={skipMotion ? { duration: 0 } : { delay: 2.5 }}
-                        style={{
-                            position: 'absolute', top: 24, right: 0,
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            fontSize: 13, color: 'var(--text-dim)',
-                            fontFamily: 'var(--font-mono)',
-                        }}
-                    >
-                        <div style={{
-                            width: 6, height: 6, borderRadius: '50%',
-                            background: partnerPresence.online ? 'var(--success-color)' : 'var(--sub-color)',
-                            boxShadow: partnerPresence.online ? '0 0 8px var(--success-color)' : 'none',
-                        }} />
-                        {SPEAKERS[currentUser === 'haidar' ? 'p2' : 'p1']?.name}: {formatLastSeen(partnerPresence)}
-                    </motion.div>
-                )}
+                {/* Partner presence is rendered globally by the PresencePill in the
+                    bottom-left corner, so the previous top-right indicator has been
+                    removed here to avoid a duplicate. */}
 
                 {/* Title block */}
                 <motion.div

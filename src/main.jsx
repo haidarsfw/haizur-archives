@@ -4,6 +4,14 @@ import { motion } from 'framer-motion'
 import './index.css'
 import App from './App.jsx'
 import RoleSelect from './RoleSelect.jsx'
+import { primeWords } from './words'
+import { wirePrimeOnUserGesture } from './hooks/useSounds'
+
+// Start fetching the word corpus early so the typing test feels instant once
+// the user unlocks the app. The Audio API needs a user gesture, so wire a
+// one-shot listener that resumes the context on first pointer/key down.
+primeWords();
+wirePrimeOnUserGesture();
 
 const ROLE_KEY = 'ours-role';
 const AUTH_KEY = 'ours-auth';
@@ -216,7 +224,7 @@ class ErrorBoundary extends React.Component {
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          height: '100vh',
+          height: 'var(--viewport-height, 100vh)',
           background: 'var(--bg-color, #1c1410)',
           color: 'var(--main-color, #d4a054)',
           fontFamily: "var(--font-display, 'DM Serif Display'), Georgia, serif",
@@ -268,7 +276,7 @@ try {
   const root = document.getElementById('root');
   if (root) {
     root.innerHTML = `
-      <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;background:#1c1410;color:#d4a054;font-family:'DM Serif Display',serif;padding:20px;text-align:center;">
+      <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100dvh;min-height:100vh;background:#1c1410;color:#d4a054;font-family:'DM Serif Display',serif;padding:20px;text-align:center;">
         <h1 style="font-style:italic">Failed to load</h1>
         <p style="color:#a89278;font-size:14px;font-family:'Outfit',sans-serif">${error.message || 'Unknown error'}</p>
       </div>

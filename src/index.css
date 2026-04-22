@@ -7,6 +7,17 @@
    Warm Mahogany — dark wood table, polaroid memories, golden lamplight
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Viewport height that accounts for the iOS Safari dynamic address bar.
+   Browsers that don't support dvh fall back to the 100vh default. */
+:root {
+  --viewport-height: 100vh;
+}
+@supports (height: 100dvh) {
+  :root {
+    --viewport-height: 100dvh;
+  }
+}
+
 :root {
   /* Warm Mahogany (Default) — dark wood, golden amber, cream polaroids */
   --bg-color: #1c1410;

@@ -182,7 +182,7 @@ export default function NightSky({ otherUsers = {} }) {
   if (isLoading) {
     return (
       <div style={{
-        width: '100%', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: '100%', height: 'var(--viewport-height, 100vh)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'linear-gradient(180deg, #070b1a 0%, #0d1528 50%, #060810 100%)',
       }}>
         <div style={{ color: '#b8a0d0', fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 18 }} className="animate-pulse">

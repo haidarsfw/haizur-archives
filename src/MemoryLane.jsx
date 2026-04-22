@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { speakerNames } from "./words";
+import { speakerNames } from "./speakers";
 import { loadHistoryByDate, PLATFORMS } from "./dataLoader";
 import PlatformIcon from "./PlatformIcons";
 import MediaRenderer from "./MediaRenderer";

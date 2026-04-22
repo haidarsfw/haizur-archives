@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/generateVersion.cjs && vite",
+    "prebuild": "node scripts/generateVersion.cjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -18,6 +18,9 @@ import {
     getDoc
 } from "firebase/firestore";
 import AudioCall from "./AudioCall";
+import { useSounds } from "./hooks/useSounds";
+import { formatLastSeen } from "./hooks/usePresence";
+import MessageEffect, { shouldTriggerEffect } from "./MessageEffects";
 
 // Chat theme presets
 const CHAT_THEMES = {
@@ -40,8 +43,10 @@ const STICKER_PACKS = {
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"];
 const COMMON_EMOJIS = ["😀", "😂", "🥰", "😍", "😘", "🥺", "😭", "😤", "🔥", "✨", "💕", "❤️", "💖", "💗", "👍", "👏", "🙌", "🤗", "😱", "😴", "😋", "🎉", "💀", "👀", "🥱", "🤔", "🤭", "😈", "🙄", "💯", "🫶", "✌️"];
+const NUDGE_COOLDOWN_MS = 8000;
+const NEAR_BOTTOM_PX = 80;
 
-const LiveChat = ({ theme, isPopup = false }) => {
+const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [role, setRole] = useState(null);
@@ -67,8 +72,14 @@ const LiveChat = ({ theme, isPopup = false }) => {
     const [replyingTo, setReplyingTo] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
+    const [effectsEnabled, setEffectsEnabled] = useState(true);
+    const [lastHereAnchorId, setLastHereAnchorId] = useState(null);
+    const [nudgeBanner, setNudgeBanner] = useState(null);
+    const [pulseId, setPulseId] = useState(null);
+    const [nudgeJustSent, setNudgeJustSent] = useState(false);
 
     const messagesEndRef = useRef(null);
+    const messagesContainerRef = useRef(null);
     const inputRef = useRef(null);
     const lastMessageCountRef = useRef(0);
     const isTabFocusedRef = useRef(true);
@@ -79,24 +90,34 @@ const LiveChat = ({ theme, isPopup = false }) => {
     const fileInputRef = useRef(null);
     const stickerInputRef = useRef(null);
     const typingTimeoutRef = useRef(null);
+    const messageRefs = useRef(new Map());
+    const effectsPlayedRef = useRef(new Set());
+    const effectsEnabledRef = useRef(true);
+    const soundEnabledRef = useRef(true);
+    const roleRef = useRef(null);
+    const sounds = useSounds();
+    const soundsRef = useRef(sounds);
+    const [activeEffects, setActiveEffects] = useState([]);
+    const lastNudgeSentRef = useRef(0);
+    const nudgeInitialisedRef = useRef(false);
+    const nudgeJustSentTimerRef = useRef(null);
 
-    // Play notification sound
-    const playSound = useCallback(() => {
-        if (!soundEnabled) return;
-        try {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            oscillator.frequency.value = 800;
-            oscillator.type = "sine";
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.2);
-        } catch (e) { /* ignore */ }
-    }, [soundEnabled]);
+    // Keep refs in sync so subscriptions can read latest values without
+    // being re-deps (otherwise Firestore listeners churn on every render).
+    useEffect(() => { soundsRef.current = sounds; }, [sounds]);
+    useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+    useEffect(() => { roleRef.current = role; }, [role]);
+
+    const playCue = useCallback((name) => {
+        if (!soundEnabledRef.current) return;
+        soundsRef.current?.play(name);
+    }, []);
+
+    // Thin wrappers over the global cue dispatcher. Kept so the rest of the
+    // component reads naturally; all three are stable across renders.
+    const playSound = useCallback(() => { playCue("messageReceive"); }, [playCue]);
+    const playSendSound = useCallback(() => { playCue("messageSend"); }, [playCue]);
+    const playReactionSound = useCallback(() => { playCue("reaction"); }, [playCue]);
 
     // Track tab focus
     useEffect(() => {
@@ -110,17 +131,27 @@ const LiveChat = ({ theme, isPopup = false }) => {
         const savedRole = localStorage.getItem("haizur-chat-role");
         const savedTheme = localStorage.getItem("haizur-chat-theme");
         const savedSound = localStorage.getItem("haizur-chat-sound");
+        const savedEffects = localStorage.getItem("haizur-chat-effects");
         if (savedRole) setRole(savedRole);
         if (savedTheme && CHAT_THEMES[savedTheme]) setChatTheme(savedTheme);
         if (savedSound !== null) setSoundEnabled(savedSound === "true");
+        if (savedEffects !== null) {
+            const v = savedEffects === "true";
+            setEffectsEnabled(v);
+            effectsEnabledRef.current = v;
+        }
         setIsLoading(false);
     }, []);
 
     // Save preferences
     useEffect(() => { localStorage.setItem("haizur-chat-theme", chatTheme); }, [chatTheme]);
     useEffect(() => { localStorage.setItem("haizur-chat-sound", String(soundEnabled)); }, [soundEnabled]);
+    useEffect(() => {
+        localStorage.setItem("haizur-chat-effects", String(effectsEnabled));
+        effectsEnabledRef.current = effectsEnabled;
+    }, [effectsEnabled]);
 
-    // Show browser notification
+    // Show browser notification. Stable across renders.
     const showNotification = useCallback((senderName, text) => {
         if (Notification.permission !== "granted" || isTabFocusedRef.current) return;
         try {
@@ -131,17 +162,19 @@ const LiveChat = ({ theme, isPopup = false }) => {
             });
             n.onclick = () => { window.focus(); n.close(); };
             setTimeout(() => n.close(), 4000);
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
     }, []);
 
-    // Subscribe to Firestore messages - REAL-TIME SYNC
+    // Subscribe to Firestore messages - REAL-TIME SYNC.
+    // IMPORTANT: deps = [role] only. Callbacks are read via refs so render
+    // churn never re-subscribes the listener (previous bug held
+    // connectionStatus on "connecting" forever).
     useEffect(() => {
         if (!role) return;
 
         setConnectionStatus("connecting");
         setError(null);
 
-        // Fallback timeout to catch infinite hang on live domains due to API restrictions
         const timeoutId = setTimeout(() => {
             setConnectionStatus((prev) => {
                 if (prev === "connecting") {
@@ -163,14 +196,19 @@ const LiveChat = ({ theme, isPopup = false }) => {
                 clearTimeout(timeoutId);
                 setConnectionStatus("connected");
                 const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const currentRole = roleRef.current;
 
-                // Check for new messages from partner
+                if (lastMessageCountRef.current === 0 && msgs.length > 0) {
+                    const firstUnread = msgs.find(m => m.sender !== currentRole && !(m.readBy || []).includes(currentRole));
+                    setLastHereAnchorId(firstUnread?.id || null);
+                }
+
                 if (msgs.length > lastMessageCountRef.current && lastMessageCountRef.current > 0) {
                     const latest = msgs[msgs.length - 1];
-                    if (latest?.sender !== role) {
+                    if (latest?.sender !== currentRole) {
                         const name = latest.sender === "princess" ? "Princess 👸" : "Haidar ⭐";
                         showNotification(name, latest.text || latest.sticker);
-                        playSound();
+                        if (soundEnabledRef.current) soundsRef.current?.play("messageReceive");
                     }
                 }
                 lastMessageCountRef.current = msgs.length;
@@ -178,7 +216,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
             },
             (err) => {
                 console.error("Firestore error:", err);
-                if (err.message && err.message.includes("permission_denied") || err.code === "permission-denied") {
+                if ((err.message && err.message.includes("permission_denied")) || err.code === "permission-denied") {
                     setConnectionStatus("error");
                     setError("Firestore Rules Expired! Please update your Firebase Console rules to allow read/write.");
                 } else {
@@ -188,14 +226,30 @@ const LiveChat = ({ theme, isPopup = false }) => {
             }
         );
 
-        return () => unsubscribe();
-    }, [role, showNotification, playSound]);
+        return () => {
+            clearTimeout(timeoutId);
+            unsubscribe();
+        };
+    }, [role, showNotification]);
 
-    // Auto-scroll
+    // Auto-scroll — only if user is already near the bottom, and only when a
+    // new message arrives (not on read-receipt / reaction updates).
+    const lastScrollSyncCountRef = useRef(0);
     useEffect(() => {
-        setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const prevCount = lastScrollSyncCountRef.current;
+        lastScrollSyncCountRef.current = messages.length;
+        if (messages.length === prevCount) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const isNearBottom = distanceFromBottom < NEAR_BOTTOM_PX;
+        // Initial load (prevCount === 0): snap to bottom once so the chat
+        // opens on the newest messages. Thereafter, respect user scroll.
+        if (prevCount === 0 || isNearBottom) {
+            requestAnimationFrame(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: prevCount === 0 ? "auto" : "smooth" });
+            });
+        }
     }, [messages]);
 
     // Focus input
@@ -255,6 +309,73 @@ const LiveChat = ({ theme, isPopup = false }) => {
         };
     }, [role]);
 
+    // Listen for nudges the partner sent us. A nudge is a single doc at
+    // `chat-nudges/{receiverRole}` that gets overwritten on each ping.
+    // Deps = [role] only; callbacks read via refs.
+    useEffect(() => {
+        if (!role) return;
+        const nudgeRef = doc(firestore, "chat-nudges", role);
+        let seenAt = null;
+
+        const unsub = onSnapshot(nudgeRef, (snap) => {
+            const data = snap.data();
+            if (!data || !data.at) return;
+            if (!nudgeInitialisedRef.current) {
+                seenAt = data.at;
+                nudgeInitialisedRef.current = true;
+                return;
+            }
+            if (seenAt === data.at) return;
+            seenAt = data.at;
+            const fromName = data.from === "haidar" ? "Haidar" : "Princess";
+            setNudgeBanner({ from: fromName, at: data.at });
+            if (soundEnabledRef.current) soundsRef.current?.play("nudge");
+            if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+                try { navigator.vibrate(40); } catch { /* noop */ }
+            }
+            setTimeout(() => {
+                setNudgeBanner((curr) => (curr && curr.at === data.at ? null : curr));
+            }, 2400);
+        }, () => { /* listener error: ignore */ });
+
+        return () => { unsub(); };
+    }, [role]);
+
+    const sendNudge = useCallback(async () => {
+        const currentRole = roleRef.current;
+        if (!currentRole) return;
+        const now = Date.now();
+        if (now - lastNudgeSentRef.current < NUDGE_COOLDOWN_MS) return;
+        lastNudgeSentRef.current = now;
+        // Inline "nudged" confirmation on the button. Revert after 1.5s.
+        setNudgeJustSent(true);
+        if (nudgeJustSentTimerRef.current) clearTimeout(nudgeJustSentTimerRef.current);
+        nudgeJustSentTimerRef.current = setTimeout(() => setNudgeJustSent(false), 1500);
+        const targetRole = currentRole === "haidar" ? "princess" : "haidar";
+        try {
+            await setDoc(doc(firestore, "chat-nudges", targetRole), {
+                from: currentRole,
+                at: now,
+            });
+            if (soundEnabledRef.current) soundsRef.current?.play("nudge");
+        } catch (err) {
+            console.log("nudge send failed:", err?.message || err);
+        }
+    }, []);
+
+    useEffect(() => () => {
+        if (nudgeJustSentTimerRef.current) clearTimeout(nudgeJustSentTimerRef.current);
+    }, []);
+
+    const scrollToMessage = useCallback((messageId) => {
+        if (!messageId) return;
+        const el = messageRefs.current.get(messageId);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setPulseId(messageId);
+        setTimeout(() => setPulseId((curr) => (curr === messageId ? null : curr)), 1200);
+    }, []);
+
     // Handle input change with typing indicator
     const handleInputChange = (e) => {
         setNewMessage(e.target.value);
@@ -306,6 +427,39 @@ const LiveChat = ({ theme, isPopup = false }) => {
         }
     }, [messages, markMessagesAsRead, role]);
 
+    // Keyword effect dispatcher. On the first messages snapshot we seed the
+    // "played" set so history doesn't erupt into hearts; subsequent inbound
+    // messages get a one-shot burst if they match. Deps = [messages] only —
+    // sound/effect enables read via refs.
+    const didInitialEffectSeedRef = useRef(false);
+    useEffect(() => {
+        if (!messages.length) return;
+        if (!didInitialEffectSeedRef.current) {
+            didInitialEffectSeedRef.current = true;
+            messages.forEach((m) => { if (m.id) effectsPlayedRef.current.add(m.id); });
+            return;
+        }
+        if (!effectsEnabledRef.current) return;
+        for (const msg of messages) {
+            if (!msg.id || effectsPlayedRef.current.has(msg.id)) continue;
+            const variant = msg.text ? shouldTriggerEffect(msg.text) : null;
+            effectsPlayedRef.current.add(msg.id);
+            if (!variant) continue;
+            requestAnimationFrame(() => {
+                const el = messageRefs.current.get(msg.id);
+                if (!el) return;
+                const rect = el.getBoundingClientRect();
+                const effectId = `${msg.id}-${Date.now()}`;
+                setActiveEffects((arr) => [...arr, { id: effectId, variant, rect }]);
+                if (soundEnabledRef.current) soundsRef.current?.play("effectBurst");
+            });
+        }
+    }, [messages]);
+
+    const removeEffect = useCallback((id) => {
+        setActiveEffects((arr) => arr.filter((e) => e.id !== id));
+    }, []);
+
     const sendMessage = async (e) => {
         e?.preventDefault();
         const text = newMessage.trim();
@@ -317,6 +471,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
         setShowStickerPicker(false);
         setReplyingTo(null);
         updateTypingStatus(false);
+        playSendSound();
 
         try {
             await addDoc(collection(firestore, "chat-messages"), {
@@ -376,6 +531,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
     const sendSticker = async (sticker) => {
         if (!role) return;
         setShowStickerPicker(false);
+        playSendSound();
         try {
             await addDoc(collection(firestore, "chat-messages"), {
                 sticker,
@@ -499,6 +655,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
     const toggleReaction = async (messageId, emoji) => {
         if (!role || !messageId) return;
         setActiveReactionMessage(null);
+        playReactionSound();
 
         try {
             const msg = messages.find(m => m.id === messageId);
@@ -769,31 +926,58 @@ const LiveChat = ({ theme, isPopup = false }) => {
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ position: 'relative' }}>
-                        <span style={{ fontSize: 18 }}>{role === "haidar" ? "✒" : "✉"}</span>
+                        <span style={{ fontSize: 18 }}>{role === "haidar" ? "✉" : "✒"}</span>
                         <span style={{
                             position: 'absolute', bottom: -2, right: -2,
                             width: 8, height: 8, borderRadius: '50%',
                             border: '1.5px solid var(--bg-color)',
-                            background: connectionStatus === "connected" ? "var(--success-color)" :
+                            background: partnerPresence?.online ? "var(--success-color)" :
+                                connectionStatus === "connected" ? "var(--sub-color)" :
                                 connectionStatus === "connecting" ? "var(--honey-color)" : "var(--sub-color)",
-                        }} className={connectionStatus === "connecting" ? "animate-pulse" : ""} />
+                        }} className={(partnerPresence?.online || connectionStatus === "connecting") ? "animate-pulse" : ""} />
                     </div>
-                    <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
                         <span style={{
                             fontFamily: 'var(--font-handwritten)', fontSize: 16, fontWeight: 600,
                             color: 'var(--text-on-card)',
                         }}>
-                            {role === "haidar" ? "Haidar" : "Princess"}
+                            {role === "haidar" ? "Princess" : "Haidar"}
                         </span>
                         <span style={{
-                            fontSize: 11, color: 'var(--text-dim-card)', marginLeft: 8,
+                            fontSize: 11, color: partnerPresence?.online ? 'var(--success-color)' : 'var(--text-dim-card)',
                             fontFamily: 'var(--font-mono)',
                         }}>
-                            {connectionStatus === "connected" ? "live" : connectionStatus === "connecting" ? "connecting..." : "offline"}
+                            {connectionStatus === "error" ? "offline" :
+                                connectionStatus === "connecting" ? "connecting…" :
+                                partnerPresence ? (formatLastSeen(partnerPresence) || "offline") : "live"}
                         </span>
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
+                    {/* Nudge — low-friction "still thinking of you" ping. Shows
+                        "👉 nudged" for 1.5s after click so the user has clear
+                        feedback the ping went through. */}
+                    <motion.button
+                        whileHover={{ scale: nudgeJustSent ? 1.0 : 1.1, rotate: nudgeJustSent ? 0 : 8 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={sendNudge}
+                        className="rounded-full transition-colors"
+                        style={{
+                            padding: nudgeJustSent ? "4px 10px" : "8px",
+                            background: nudgeJustSent ? "rgba(255, 200, 120, 0.22)" : "rgba(255, 200, 120, 0.12)",
+                            cursor: "pointer",
+                            fontSize: nudgeJustSent ? 13 : 16,
+                            fontFamily: nudgeJustSent ? "var(--font-mono)" : "inherit",
+                            color: nudgeJustSent ? "var(--main-color)" : "inherit",
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            border: "none",
+                            minWidth: nudgeJustSent ? 0 : undefined,
+                        }}
+                        title="Send a nudge"
+                        aria-label={nudgeJustSent ? "Nudge sent" : "Send a nudge"}
+                    >
+                        {nudgeJustSent ? <><span>👉</span><span>nudged</span></> : "✨"}
+                    </motion.button>
                     {/* Call button */}
                     <motion.button
                         whileHover={{ scale: 1.1 }}
@@ -801,6 +985,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                         onClick={() => setIsCallOpen(true)}
                         className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors text-green-500"
                         title="Voice Call"
+                        aria-label="Voice call"
                     >
                         📞
                     </motion.button>
@@ -881,6 +1066,23 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                     {t.emoji} {t.name}
                                 </motion.button>
                             ))}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px 10px', fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                            <span>Message effects</span>
+                            <button
+                                type="button"
+                                onClick={() => setEffectsEnabled((v) => !v)}
+                                aria-pressed={effectsEnabled}
+                                style={{
+                                    padding: '4px 10px', borderRadius: 999,
+                                    border: '1px solid var(--border-color)',
+                                    background: effectsEnabled ? 'var(--main-color-dim)' : 'transparent',
+                                    color: effectsEnabled ? 'var(--main-color)' : 'var(--text-dim)',
+                                    cursor: 'pointer', fontSize: 11,
+                                }}
+                            >
+                                {effectsEnabled ? 'on' : 'off'}
+                            </button>
                         </div>
                     </motion.div>
                 )}
@@ -965,8 +1167,10 @@ const LiveChat = ({ theme, isPopup = false }) => {
 
             {/* Messages - click outside to close popup */}
             <div
+                ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto p-4 space-y-1"
                 onClick={() => setActiveReactionMessage(null)}
+                style={{ overscrollBehavior: 'contain' }}
             >
                 {Object.entries(groupedMessages).map(([date, msgs]) => (
                     <div key={date}>
@@ -1014,12 +1218,29 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                 );
                             }
 
+                            const isAnchor = msg.id && msg.id === lastHereAnchorId;
+                            const isPulsing = msg.id && pulseId === msg.id;
                             return (
+                                <React.Fragment key={msg.id || idx}>
+                                    {isAnchor && (
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "18px 4px 8px" }} aria-label="Unread marker">
+                                            <div style={{ flex: 1, height: 1, background: "var(--main-color)", opacity: 0.35 }} />
+                                            <span style={{ fontSize: 10.5, color: "var(--main-color)", fontFamily: "var(--font-mono)", letterSpacing: "0.08em", padding: "2px 8px", border: "1px solid var(--main-color)", borderRadius: 999, opacity: 0.8 }}>
+                                                UNREAD ↓
+                                            </span>
+                                            <div style={{ flex: 1, height: 1, background: "var(--main-color)", opacity: 0.35 }} />
+                                        </div>
+                                    )}
                                 <motion.div
-                                    key={msg.id || idx}
+                                    id={msg.id ? `msg-${msg.id}` : undefined}
+                                    ref={(el) => {
+                                        if (!msg.id) return;
+                                        if (el) messageRefs.current.set(msg.id, el);
+                                        else messageRefs.current.delete(msg.id);
+                                    }}
                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    animate={isPulsing ? { opacity: 1, y: 0, scale: [1, 1.04, 1] } : { opacity: 1, y: 0, scale: 1 }}
+                                    transition={{ duration: isPulsing ? 0.6 : 0.2, ease: "easeOut" }}
                                     className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
                                 >
                                     <div className="relative max-w-[80%]">
@@ -1047,12 +1268,18 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                                 <span className="absolute -top-1 -right-1 text-xs">⭐</span>
                                             )}
 
-                                            {/* Reply preview */}
+                                            {/* Reply preview — tap to jump to the quoted message */}
                                             {msg.replyTo && (
-                                                <div className="mb-1 px-2 py-1 rounded bg-white/10 border-l-2 border-white/30 text-[12px] opacity-80">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); scrollToMessage(msg.replyTo.id); }}
+                                                    className="mb-1 px-2 py-1 rounded text-[12px] opacity-80 text-left w-full hover:opacity-100 transition-opacity"
+                                                    style={{ cursor: "pointer", background: "rgba(255,255,255,0.12)", color: "inherit", border: "none", borderLeft: "2px solid rgba(255,255,255,0.35)", display: "block" }}
+                                                    aria-label="Jump to replied message"
+                                                >
                                                     <span className="font-medium">{msg.replyTo.sender === "haidar" ? "Haidar" : "Princess"}: </span>
                                                     {msg.replyTo.text}
-                                                </div>
+                                                </button>
                                             )}
 
                                             {isSticker ? (
@@ -1227,6 +1454,7 @@ const LiveChat = ({ theme, isPopup = false }) => {
                                         </AnimatePresence>
                                     </div>
                                 </motion.div>
+                                </React.Fragment>
                             );
                         })}
                     </div>
@@ -1595,6 +1823,45 @@ const LiveChat = ({ theme, isPopup = false }) => {
                 isOpen={isCallOpen}
                 onClose={() => setIsCallOpen(false)}
             />
+
+            {/* Floating nudge banner — shown for a couple seconds when partner pings */}
+            <AnimatePresence>
+                {nudgeBanner && (
+                    <motion.div
+                        key={nudgeBanner.at}
+                        initial={{ opacity: 0, y: -10, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 380, damping: 22 }}
+                        style={{
+                            position: "absolute", top: 60, left: "50%", transform: "translateX(-50%)",
+                            zIndex: 40,
+                            padding: "8px 16px",
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--main-color)",
+                            borderRadius: 999,
+                            boxShadow: "0 8px 24px var(--shadow-color)",
+                            fontFamily: "var(--font-handwritten)",
+                            fontSize: 14, color: "var(--main-color)",
+                            display: "flex", alignItems: "center", gap: 8,
+                            pointerEvents: "none",
+                        }}
+                    >
+                        <motion.span animate={{ rotate: [0, 14, -14, 0] }} transition={{ duration: 0.8 }}>✨</motion.span>
+                        <span>{nudgeBanner.from} sent a nudge</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Message effect overlays */}
+            {activeEffects.map((e) => (
+                <MessageEffect
+                    key={e.id}
+                    variant={e.variant}
+                    anchorRect={e.rect}
+                    onDone={() => removeEffect(e.id)}
+                />
+            ))}
         </div>
     );
 };
