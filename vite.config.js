@@ -23,8 +23,14 @@ export default defineConfig({
           if (!id.includes('node_modules')) return;
           if (id.includes('firebase')) return 'vendor-firebase';
           if (id.includes('framer-motion') || id.includes('motion-dom') || id.includes('motion-utils')) return 'vendor-motion';
-          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
-          if (id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) return 'vendor-react';
+          // Bundle recharts / d3 together with React itself so the charts
+          // chunk cannot evaluate before React is ready (Vite splits can
+          // otherwise trigger a TDZ read of `React.forwardRef` at module
+          // top-level in recharts, crashing the page).
+          if (
+            id.includes('recharts') || id.includes('/d3-') || id.includes('victory-vendor') ||
+            id.includes('/react-dom/') || id.includes('/react/') || id.includes('/scheduler/')
+          ) return 'vendor-react';
         },
       },
     },
