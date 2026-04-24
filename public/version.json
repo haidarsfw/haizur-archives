@@ -1,10 +1,7 @@
 {
-  "version": "1777070875131",
-  "builtAt": "2026-04-24T22:47:55.131Z",
+  "version": "1777071388091",
+  "builtAt": "2026-04-24T22:56:28.091Z",
   "highlights": [
-    "Scroll fix FINAL: posisi di-track via scroll-event, bukan useLayoutEffect cleanup",
-    "Sticker animasi scale-in dihapus total — ga ada lagi bubble yg ngerubah tinggi pas mount",
-    "Jump-to-unread pake scroll tracker yang sama — satu source of truth",
-    "Notif groundwork: useWebPush + NotifBanner + /api/notify (server env belum di-set)"
+    "Scroll chat udah ga loncat-loncat sendiri lagi, biar ga kaya hubungan kita nasibnya (yang rusak ✌🏻)"
   ]
 }

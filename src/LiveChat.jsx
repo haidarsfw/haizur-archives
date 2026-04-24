@@ -33,6 +33,7 @@ import LinkPreview from "./LinkPreview";
 import { formatMessageText, extractFirstUrl } from "./chatTextFormat";
 import { useWebPush } from "./hooks/useWebPush";
 import NotifBanner from "./NotifBanner";
+import { notifyPartner } from "./notifyClient";
 
 // Chat theme presets
 const CHAT_THEMES = {
@@ -789,7 +790,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     const fresh = await getDoc(ref);
                     if (!fresh.exists()) continue;
                     const payload = fresh.data();
-                    await addDoc(collection(firestore, "chat-messages"), {
+                    const added = await addDoc(collection(firestore, "chat-messages"), {
                         ...(payload.text && { text: payload.text }),
                         ...(payload.sticker && { sticker: payload.sticker }),
                         ...(payload.image && { image: payload.image }),
@@ -803,6 +804,13 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         scheduled: true,
                     });
                     await deleteDoc(ref);
+                    notifyPartner({
+                        senderRole: payload.sender,
+                        text: payload.text,
+                        sticker: payload.sticker,
+                        image: payload.image,
+                        messageId: added.id,
+                    });
                 } catch (err) {
                     console.log("dispatch err:", err?.message);
                 }
@@ -882,7 +890,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         haptic.pop();
 
         try {
-            await addDoc(collection(firestore, "chat-messages"), {
+            const added = await addDoc(collection(firestore, "chat-messages"), {
                 text,
                 sender: role,
                 timestamp: serverTimestamp(),
@@ -896,6 +904,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     }
                 })
             });
+            notifyPartner({ senderRole: role, text, messageId: added.id });
         } catch (err) {
             console.error("Send error:", err);
             setNewMessage(text);
@@ -1009,12 +1018,13 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         playSendSound();
         haptic.pop();
         try {
-            await addDoc(collection(firestore, "chat-messages"), {
+            const added = await addDoc(collection(firestore, "chat-messages"), {
                 sticker,
                 sender: role,
                 timestamp: serverTimestamp(),
                 reactions: []
             });
+            notifyPartner({ senderRole: role, sticker, messageId: added.id });
         } catch (err) {
             console.error("Send sticker error:", err);
         }
@@ -1044,7 +1054,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     const base64Audio = reader.result;
                     try {
                         justSentRef.current = true;
-                        await addDoc(collection(firestore, "chat-messages"), {
+                        const added = await addDoc(collection(firestore, "chat-messages"), {
                             voiceMessage: base64Audio,
                             voiceDuration: recordingTime,
                             sender: role,
@@ -1052,6 +1062,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                             reactions: [],
                             starred: false
                         });
+                        notifyPartner({ senderRole: role, voiceMessage: "voice", messageId: added.id });
                     } catch (err) {
                         console.error("Voice send error:", err);
                         setError("Failed to send voice message");
@@ -1296,7 +1307,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         setSendingImage(true);
         const caption = newMessage.trim();
         try {
-            await addDoc(collection(firestore, "chat-messages"), {
+            const added = await addDoc(collection(firestore, "chat-messages"), {
                 image: imagePreview,
                 text: caption || null,
                 sender: role,
@@ -1306,6 +1317,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 readByTimes: { [role]: serverTimestamp() },
                 starred: false
             });
+            notifyPartner({ senderRole: role, text: caption || null, image: "image", messageId: added.id });
             setImagePreview(null);
             setNewMessage("");
             justSentRef.current = true;
