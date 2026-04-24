@@ -97,24 +97,35 @@ export default async function handler(req, res) {
     // Diagnostic: allow caller to peek env shape without exposing secrets
     if (body?.__diag === true) {
         const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "";
-        let pkLen = 0, pkNewlines = 0, pkLiteralBS = 0, parseOk = false, projectId = null;
+        let pkLen = 0, pkNewlines = 0, pkCR = 0, pkLiteralBS = 0, parseOk = false, projectId = null;
+        let pkHead = "", pkTail = "", pkByteHex = "";
         try {
             const parsed = JSON.parse(raw);
             parseOk = true;
             projectId = parsed.project_id || null;
-            pkLen = (parsed.private_key || "").length;
-            pkNewlines = ((parsed.private_key || "").match(/\n/g) || []).length;
-            pkLiteralBS = ((parsed.private_key || "").match(/\\n/g) || []).length;
+            const pk = parsed.private_key || "";
+            pkLen = pk.length;
+            pkNewlines = (pk.match(/\n/g) || []).length;
+            pkCR = (pk.match(/\r/g) || []).length;
+            pkLiteralBS = (pk.match(/\\n/g) || []).length;
+            pkHead = pk.slice(0, 40);
+            pkTail = pk.slice(-40);
+            // Hex of first 80 bytes so we can see hidden chars
+            pkByteHex = Array.from(pk.slice(0, 80)).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join(" ");
         } catch { /* noop */ }
         return res.status(200).json({
             diag: true,
-            buildTag: "notify-v2",
+            buildTag: "notify-v3",
             envRawLen: raw.length,
             parseOk,
             projectId,
             pkLen,
             pkNewlines,
+            pkCR,
             pkLiteralBS,
+            pkHead,
+            pkTail,
+            pkByteHex,
             hasDbUrl: !!process.env.FIREBASE_DATABASE_URL,
             hasResendKey: !!process.env.RESEND_API_KEY,
         });
