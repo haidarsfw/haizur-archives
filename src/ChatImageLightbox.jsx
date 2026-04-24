@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useReducedMotion } from './hooks/useReducedMotion';
+import { useHaptics } from './hooks/useHaptics';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
@@ -34,6 +36,8 @@ export default function ChatImageLightbox({ images, startIndex = 0, onClose }) {
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [savedToast, setSavedToast] = useState(false);
     const [controlsVisible, setControlsVisible] = useState(true);
+    const reducedMotion = useReducedMotion();
+    const haptic = useHaptics();
 
     const touchStateRef = useRef({
         mode: null, startX: 0, startY: 0,
@@ -58,13 +62,15 @@ export default function ChatImageLightbox({ images, startIndex = 0, onClose }) {
         setIndex((i) => (i + 1) % total);
         setScale(1);
         setPan({ x: 0, y: 0 });
-    }, [total]);
+        haptic.tap();
+    }, [total, haptic]);
     const prev = useCallback(() => {
         if (total <= 1) return;
         setIndex((i) => (i - 1 + total) % total);
         setScale(1);
         setPan({ x: 0, y: 0 });
-    }, [total]);
+        haptic.tap();
+    }, [total, haptic]);
 
     // Keyboard
     useEffect(() => {
@@ -332,9 +338,9 @@ export default function ChatImageLightbox({ images, startIndex = 0, onClose }) {
                         key={current.id || safeIndex}
                         src={current.src}
                         alt={current.caption || 'Image'}
-                        initial={{ opacity: 0, scale: 0.94 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.18 }}
+                        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
+                        animate={reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                        transition={{ duration: reducedMotion ? 0.08 : 0.18 }}
                         draggable={false}
                         style={{
                             maxWidth: '95vw', maxHeight: '90vh',

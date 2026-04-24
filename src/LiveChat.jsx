@@ -15,14 +15,22 @@ import {
     arrayRemove,
     deleteDoc,
     setDoc,
-    getDoc
+    getDoc,
+    getDocs,
+    where,
+    Timestamp
 } from "firebase/firestore";
 import AudioCall from "./AudioCall";
 import { useSounds } from "./hooks/useSounds";
 import { formatLastSeen } from "./hooks/usePresence";
+import { useHaptics } from "./hooks/useHaptics";
+import { useReducedMotion } from "./hooks/useReducedMotion";
 import MessageEffect, { shouldTriggerEffect } from "./MessageEffects";
 import ChatImageLightbox from "./ChatImageLightbox";
-import { formatMessageText } from "./chatTextFormat";
+import ChatEmojiPicker from "./ChatEmojiPicker";
+import ChatArchivePanel from "./ChatArchivePanel";
+import LinkPreview from "./LinkPreview";
+import { formatMessageText, extractFirstUrl } from "./chatTextFormat";
 
 // Chat theme presets
 const CHAT_THEMES = {
@@ -44,11 +52,13 @@ const STICKER_PACKS = {
 };
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"];
-const COMMON_EMOJIS = ["😀", "😂", "🥰", "😍", "😘", "🥺", "😭", "😤", "🔥", "✨", "💕", "❤️", "💖", "💗", "👍", "👏", "🙌", "🤗", "😱", "😴", "😋", "🎉", "💀", "👀", "🥱", "🤔", "🤭", "😈", "🙄", "💯", "🫶", "✌️"];
 const NUDGE_COOLDOWN_MS = 8000;
 const NEAR_BOTTOM_PX = 80;
 
+const IS_MOBILE = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+
 const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
+    const isMobile = IS_MOBILE;
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [role, setRole] = useState(null);
@@ -66,6 +76,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [playingVoiceId, setPlayingVoiceId] = useState(null);
+    const [voiceProgress, setVoiceProgress] = useState(0); // 0..1 for current playingVoiceId
     const [showStarred, setShowStarred] = useState(false);
     const [customStickers, setCustomStickers] = useState([]);
     const [imagePreview, setImagePreview] = useState(null);
@@ -80,9 +91,20 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const [pulseId, setPulseId] = useState(null);
     const [nudgeJustSent, setNudgeJustSent] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(null);
-    const [copyToast, setCopyToast] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [seenPopoverId, setSeenPopoverId] = useState(null);
+    const [undoState, setUndoState] = useState(null); // { id, snapshot, expiresAt }
+    const [showArchive, setShowArchive] = useState(false);
+    const [editingMessage, setEditingMessage] = useState(null); // { id, originalText }
+    const [reactionDetail, setReactionDetail] = useState(null); // msgId
+    const [reactionEmojiPicker, setReactionEmojiPicker] = useState(null); // msgId for "+ emoji" picker
+    const [scheduledMessages, setScheduledMessages] = useState([]);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [scheduledDraft, setScheduledDraft] = useState(null); // preview chip
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [isNearBottomState, setIsNearBottomState] = useState(true);
+    const [screenshotToast, setScreenshotToast] = useState(null);
+    const [autoPlayVoice, setAutoPlayVoice] = useState(true);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -103,19 +125,34 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const roleRef = useRef(null);
     const sounds = useSounds();
     const soundsRef = useRef(sounds);
+    const haptic = useHaptics();
+    const reducedMotion = useReducedMotion();
     const [activeEffects, setActiveEffects] = useState([]);
     const lastNudgeSentRef = useRef(0);
     const nudgeInitialisedRef = useRef(false);
     const nudgeJustSentTimerRef = useRef(null);
     const dragDepthRef = useRef(0);
-    const copyToastTimerRef = useRef(null);
     const seenPopoverTimerRef = useRef(null);
+    const undoTimerRef = useRef(null);
+    const undoStateRef = useRef(null);
+    const draftSaveTimerRef = useRef(null);
+    const lastDraftRoleRef = useRef(null);
+    const reactionLongPressTimer = useRef(null);
+    const bubbleLongPressTimer = useRef(null);
+    const schedulerTimerRef = useRef(null);
+    const lastHiddenAtRef = useRef(0);
+    const screenshotToastTimerRef = useRef(null);
+    const autoPlayVoiceRef = useRef(true);
+    const reducedMotionRef = useRef(false);
 
     // Keep refs in sync so subscriptions can read latest values without
     // being re-deps (otherwise Firestore listeners churn on every render).
     useEffect(() => { soundsRef.current = sounds; }, [sounds]);
     useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
     useEffect(() => { roleRef.current = role; }, [role]);
+    useEffect(() => { undoStateRef.current = undoState; }, [undoState]);
+    useEffect(() => { autoPlayVoiceRef.current = autoPlayVoice; }, [autoPlayVoice]);
+    useEffect(() => { reducedMotionRef.current = reducedMotion; }, [reducedMotion]);
 
     const playCue = useCallback((name) => {
         if (!soundEnabledRef.current) return;
@@ -135,10 +172,59 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         return () => document.removeEventListener("visibilitychange", handleVisibility);
     }, []);
 
+    // Screenshot heuristic — iOS/Android briefly hide the tab when capturing.
+    // If we see a hide→show gap shorter than ~220ms while the tab had no blur
+    // transition, treat as a likely screenshot and emit an event.
+    useEffect(() => {
+        if (!role) return;
+        const onVis = async () => {
+            if (document.hidden) {
+                lastHiddenAtRef.current = performance.now();
+                return;
+            }
+            const gap = performance.now() - lastHiddenAtRef.current;
+            if (gap > 50 && gap < 220) {
+                try {
+                    await setDoc(doc(firestore, "chat-events", role), {
+                        event: "screenshot",
+                        at: Date.now(),
+                    }, { merge: true });
+                } catch { /* noop */ }
+            }
+        };
+        document.addEventListener("visibilitychange", onVis);
+        return () => document.removeEventListener("visibilitychange", onVis);
+    }, [role]);
+
+    // Subscribe to partner screenshot events
+    useEffect(() => {
+        if (!role) return;
+        const other = role === "haidar" ? "princess" : "haidar";
+        const ref = doc(firestore, "chat-events", other);
+        let initialSkipped = false;
+        const unsub = onSnapshot(ref, (snap) => {
+            if (!initialSkipped) { initialSkipped = true; return; }
+            const data = snap.data();
+            if (!data?.event || !data?.at) return;
+            // Throttle: only show if event < 15s old and we haven't shown it already
+            if (Date.now() - data.at > 15000) return;
+            const partnerName = other === "haidar" ? "Haidar" : "Princess";
+            setScreenshotToast(`${partnerName} mengambil screenshot`);
+            if (screenshotToastTimerRef.current) clearTimeout(screenshotToastTimerRef.current);
+            screenshotToastTimerRef.current = setTimeout(() => setScreenshotToast(null), 3200);
+        }, () => { /* noop */ });
+        return () => unsub();
+    }, [role]);
+
     // Cleanup transient-toast timers on unmount
     useEffect(() => () => {
-        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
         if (seenPopoverTimerRef.current) clearTimeout(seenPopoverTimerRef.current);
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+        if (schedulerTimerRef.current) clearInterval(schedulerTimerRef.current);
+        if (screenshotToastTimerRef.current) clearTimeout(screenshotToastTimerRef.current);
+        if (bubbleLongPressTimer.current) clearTimeout(bubbleLongPressTimer.current);
+        if (reactionLongPressTimer.current) clearTimeout(reactionLongPressTimer.current);
     }, []);
 
     // Paste-to-send image (Ctrl/Cmd+V with image in clipboard)
@@ -289,6 +375,38 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         }
     }, [messages]);
 
+    // Track scroll position so jump-to-unread pill knows when to show
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        let frame = 0;
+        const onScroll = () => {
+            if (frame) return;
+            frame = requestAnimationFrame(() => {
+                frame = 0;
+                const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+                setIsNearBottomState(distance < NEAR_BOTTOM_PX);
+            });
+        };
+        container.addEventListener("scroll", onScroll, { passive: true });
+        onScroll();
+        return () => {
+            container.removeEventListener("scroll", onScroll);
+            if (frame) cancelAnimationFrame(frame);
+        };
+    }, []);
+
+    // Unread count — partner messages not yet marked read by me
+    useEffect(() => {
+        if (!role) { setUnreadCount(0); return; }
+        const count = messages.filter(m =>
+            m.sender && m.sender !== role
+            && !m.deletedForEveryone
+            && !(m.readBy || []).includes(role)
+        ).length;
+        setUnreadCount(count);
+    }, [messages, role]);
+
     // Focus input
     useEffect(() => {
         if (role && inputRef.current) setTimeout(() => inputRef.current?.focus(), 300);
@@ -384,6 +502,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         const now = Date.now();
         if (now - lastNudgeSentRef.current < NUDGE_COOLDOWN_MS) return;
         lastNudgeSentRef.current = now;
+        haptic.success();
         // Inline "nudged" confirmation on the button. Revert after 1.5s.
         setNudgeJustSent(true);
         if (nudgeJustSentTimerRef.current) clearTimeout(nudgeJustSentTimerRef.current);
@@ -413,9 +532,12 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         setTimeout(() => setPulseId((curr) => (curr === messageId ? null : curr)), 1200);
     }, []);
 
-    // Handle input change with typing indicator
+    const draftKey = useCallback(() => (role ? `haizur-chat-draft-${role}` : null), [role]);
+
+    // Handle input change with typing indicator + draft auto-save
     const handleInputChange = (e) => {
-        setNewMessage(e.target.value);
+        const value = e.target.value;
+        setNewMessage(value);
 
         // Update typing status
         updateTypingStatus(true);
@@ -427,7 +549,30 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         typingTimeoutRef.current = setTimeout(() => {
             updateTypingStatus(false);
         }, 2000);
+
+        // Draft auto-save (debounced, only for new-message compose — skip during edit)
+        if (editingMessage) return;
+        if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = setTimeout(() => {
+            const key = draftKey();
+            if (!key) return;
+            try {
+                if (value.trim()) localStorage.setItem(key, value);
+                else localStorage.removeItem(key);
+            } catch { /* storage full / private mode — ignore */ }
+        }, 500);
     };
+
+    // Restore draft on role boot
+    useEffect(() => {
+        if (!role) return;
+        if (lastDraftRoleRef.current === role) return;
+        lastDraftRoleRef.current = role;
+        try {
+            const saved = localStorage.getItem(`haizur-chat-draft-${role}`);
+            if (saved) setNewMessage(saved);
+        } catch { /* noop */ }
+    }, [role]);
 
     // Clear typing when input loses focus
     const handleInputBlur = () => {
@@ -478,6 +623,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
             return;
         }
         if (!effectsEnabledRef.current) return;
+        if (reducedMotionRef.current) return;
         for (const msg of messages) {
             if (!msg.id || effectsPlayedRef.current.has(msg.id)) continue;
             const variant = msg.text ? shouldTriggerEffect(msg.text) : null;
@@ -498,18 +644,125 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         setActiveEffects((arr) => arr.filter((e) => e.id !== id));
     }, []);
 
+    // Subscribe to my pending scheduled messages
+    useEffect(() => {
+        if (!role) return;
+        const q = query(
+            collection(firestore, "scheduled-messages"),
+            where("sender", "==", role),
+            orderBy("scheduledAt", "asc")
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setScheduledMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => { console.log("scheduled listener:", err?.message); });
+        return () => unsub();
+    }, [role]);
+
+    // Client-side dispatcher — check every 30s for due scheduled items.
+    // Race-safe: dispatch writes a new chat-messages doc and deletes the scheduled doc
+    // under a fresh getDoc check so double-clients don't double-send.
+    useEffect(() => {
+        if (!role) return;
+        const dispatch = async () => {
+            const currentRole = roleRef.current;
+            if (!currentRole) return;
+            const nowMs = Date.now();
+            const due = scheduledMessages.filter(s => {
+                const at = s.scheduledAt?.toMillis?.() ?? 0;
+                return at > 0 && at <= nowMs;
+            });
+            for (const item of due) {
+                try {
+                    // Verify still exists (idempotency guard)
+                    const ref = doc(firestore, "scheduled-messages", item.id);
+                    const fresh = await getDoc(ref);
+                    if (!fresh.exists()) continue;
+                    const payload = fresh.data();
+                    await addDoc(collection(firestore, "chat-messages"), {
+                        ...(payload.text && { text: payload.text }),
+                        ...(payload.sticker && { sticker: payload.sticker }),
+                        ...(payload.image && { image: payload.image }),
+                        ...(payload.replyTo && { replyTo: payload.replyTo }),
+                        sender: payload.sender,
+                        timestamp: serverTimestamp(),
+                        reactions: [],
+                        readBy: [payload.sender],
+                        readByTimes: { [payload.sender]: serverTimestamp() },
+                        starred: false,
+                        scheduled: true,
+                    });
+                    await deleteDoc(ref);
+                } catch (err) {
+                    console.log("dispatch err:", err?.message);
+                }
+            }
+        };
+        dispatch(); // run once on mount
+        schedulerTimerRef.current = setInterval(dispatch, 30000);
+        return () => {
+            if (schedulerTimerRef.current) { clearInterval(schedulerTimerRef.current); schedulerTimerRef.current = null; }
+        };
+    }, [role, scheduledMessages]);
+
+    const scheduleMessage = async (whenDate) => {
+        if (!role) return;
+        const text = newMessage.trim();
+        if (!text) return;
+        if (!whenDate || isNaN(whenDate.getTime())) return;
+        if (whenDate.getTime() < Date.now() + 30000) {
+            setError("Jadwal minimal 30 detik dari sekarang");
+            return;
+        }
+        try {
+            await addDoc(collection(firestore, "scheduled-messages"), {
+                text,
+                sender: role,
+                scheduledAt: Timestamp.fromDate(whenDate),
+                createdAt: serverTimestamp(),
+                ...(replyingTo && {
+                    replyTo: {
+                        id: replyingTo.id,
+                        text: replyingTo.text || (replyingTo.sticker ? "Sticker" : replyingTo.image ? "Image" : "Voice"),
+                        sender: replyingTo.sender,
+                    },
+                }),
+            });
+            setScheduledDraft({ at: whenDate.getTime(), text });
+            setTimeout(() => setScheduledDraft(null), 2600);
+            setNewMessage("");
+            setReplyingTo(null);
+            setShowScheduleModal(false);
+            haptic.success();
+            try { const key = draftKey(); if (key) localStorage.removeItem(key); } catch { /* noop */ }
+        } catch (err) {
+            console.error("schedule err:", err);
+            setError("Gagal jadwalkan");
+        }
+    };
+
+    const cancelScheduled = async (id) => {
+        try {
+            await deleteDoc(doc(firestore, "scheduled-messages", id));
+            haptic.tap();
+        } catch { setError("Gagal hapus jadwal"); }
+    };
+
     const sendMessage = async (e) => {
         e?.preventDefault();
+        // Route to edit-save when in edit mode
+        if (editingMessage) { await saveEdit(); return; }
         const text = newMessage.trim();
         if (!text || !role) return;
 
         const reply = replyingTo;
         setNewMessage("");
+        try { const key = draftKey(); if (key) localStorage.removeItem(key); } catch { /* noop */ }
         setShowEmojiPicker(false);
         setShowStickerPicker(false);
         setReplyingTo(null);
         updateTypingStatus(false);
         playSendSound();
+        haptic.pop();
 
         try {
             await addDoc(collection(firestore, "chat-messages"), {
@@ -533,29 +786,95 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         }
     };
 
-    // Delete message
-    const deleteMessage = async (messageId, forEveryone = false) => {
-        if (!messageId) return;
+    // Delete message for everyone. Stashes original content into deletedContent
+    // so it can later be restored via undo toast or the archive panel.
+    const deleteMessage = async (messageId) => {
+        if (!role || !messageId) return;
+        const msg = messages.find(m => m.id === messageId);
+        if (!msg || msg.deletedForEveryone) return;
+        const snapshot = {
+            text: msg.text || null,
+            image: msg.image || null,
+            sticker: msg.sticker || null,
+            voiceMessage: msg.voiceMessage || null,
+            voiceDuration: msg.voiceDuration || null,
+            originalTimestamp: msg.timestamp || null,
+            originalSender: msg.sender || null,
+            replyTo: msg.replyTo || null,
+        };
+        haptic.pop();
+        setActiveReactionMessage(null);
         try {
-            if (forEveryone) {
-                // Mark as deleted for everyone (show indicator)
-                await updateDoc(doc(firestore, "chat-messages", messageId), {
-                    deletedForEveryone: true,
-                    text: null,
-                    sticker: null,
-                    image: null,
-                    voiceMessage: null
-                });
-            } else {
-                // Just hide for self (mark as deleted)
-                await updateDoc(doc(firestore, "chat-messages", messageId), {
-                    deletedFor: arrayUnion(role)
-                });
-            }
-            setActiveReactionMessage(null);
+            await updateDoc(doc(firestore, "chat-messages", messageId), {
+                deletedForEveryone: true,
+                deletedBy: role,
+                deletedAt: serverTimestamp(),
+                deletedContent: snapshot,
+                text: null,
+                sticker: null,
+                image: null,
+                voiceMessage: null,
+                voiceDuration: null,
+            });
+            showUndoToast(messageId, snapshot);
         } catch (err) {
             console.error("Delete error:", err);
-            setError("Failed to delete");
+            setError("Gagal hapus pesan");
+        }
+    };
+
+    const showUndoToast = (id, snapshot) => {
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        setUndoState({ id, snapshot, expiresAt: Date.now() + 5000 });
+        undoTimerRef.current = setTimeout(() => setUndoState(null), 5000);
+    };
+
+    const undoDelete = async () => {
+        const current = undoStateRef.current;
+        if (!current) return;
+        const { id, snapshot } = current;
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        setUndoState(null);
+        try {
+            await updateDoc(doc(firestore, "chat-messages", id), {
+                deletedForEveryone: false,
+                deletedBy: null,
+                deletedAt: null,
+                deletedContent: null,
+                text: snapshot.text,
+                image: snapshot.image,
+                sticker: snapshot.sticker,
+                voiceMessage: snapshot.voiceMessage,
+                voiceDuration: snapshot.voiceDuration,
+            });
+            haptic.tap();
+            setPulseId(id);
+            setTimeout(() => setPulseId(null), 800);
+        } catch {
+            setError("Gagal undo");
+        }
+    };
+
+    const restoreFromArchive = async (id, snapshot) => {
+        if (!id || !snapshot) return;
+        try {
+            await updateDoc(doc(firestore, "chat-messages", id), {
+                deletedForEveryone: false,
+                deletedBy: null,
+                deletedAt: null,
+                deletedContent: null,
+                text: snapshot.text || null,
+                image: snapshot.image || null,
+                sticker: snapshot.sticker || null,
+                voiceMessage: snapshot.voiceMessage || null,
+                voiceDuration: snapshot.voiceDuration || null,
+            });
+            haptic.tap();
+            setPulseId(id);
+            setTimeout(() => setPulseId(null), 800);
+            setShowArchive(false);
+        } catch {
+            setError("Gagal pulihkan pesan");
         }
     };
 
@@ -570,6 +889,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         if (!role) return;
         setShowStickerPicker(false);
         playSendSound();
+        haptic.pop();
         try {
             await addDoc(collection(firestore, "chat-messages"), {
                 sticker,
@@ -670,6 +990,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         if (playingVoiceId === messageId) {
             audioPlayerRef.current?.pause();
             setPlayingVoiceId(null);
+            setVoiceProgress(0);
             return;
         }
 
@@ -679,9 +1000,39 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
         const audio = new Audio(audioData);
         audioPlayerRef.current = audio;
-        audio.onended = () => setPlayingVoiceId(null);
-        audio.play();
+        audio.ontimeupdate = () => {
+            const d = audio.duration;
+            if (!d || isNaN(d)) return;
+            setVoiceProgress(audio.currentTime / d);
+        };
+        audio.onended = () => {
+            setPlayingVoiceId(null);
+            setVoiceProgress(0);
+            // Auto-play next consecutive voice from same sender
+            if (autoPlayVoiceRef.current) {
+                const currentIdx = messages.findIndex(m => m.id === messageId);
+                if (currentIdx >= 0) {
+                    const current = messages[currentIdx];
+                    for (let i = currentIdx + 1; i < messages.length; i++) {
+                        const next = messages[i];
+                        if (!next?.voiceMessage || next.deletedForEveryone) continue;
+                        if (next.sender !== current.sender) break;
+                        setTimeout(() => playVoiceMessage(next.id, next.voiceMessage), 600);
+                        break;
+                    }
+                }
+            }
+        };
+        audio.play().catch(() => { setPlayingVoiceId(null); setVoiceProgress(0); });
         setPlayingVoiceId(messageId);
+    };
+
+    const seekVoice = (fraction) => {
+        const a = audioPlayerRef.current;
+        if (!a || !a.duration || isNaN(a.duration)) return;
+        const clamped = Math.max(0, Math.min(1, fraction));
+        a.currentTime = clamped * a.duration;
+        setVoiceProgress(clamped);
     };
 
     const formatRecordingTime = (seconds) => {
@@ -694,6 +1045,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         if (!role || !messageId) return;
         setActiveReactionMessage(null);
         playReactionSound();
+        haptic.tap();
 
         try {
             const msg = messages.find(m => m.id === messageId);
@@ -884,42 +1236,62 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         }
     };
 
-    // Copy message text to clipboard with iOS 12 fallback
-    const copyMessageText = async (text) => {
-        if (!text) return;
-        try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(text);
-            } else {
-                const ta = document.createElement("textarea");
-                ta.value = text;
-                ta.setAttribute("readonly", "");
-                ta.style.position = "fixed";
-                ta.style.top = "-9999px";
-                ta.style.opacity = "0";
-                document.body.appendChild(ta);
-                ta.select();
-                try { document.execCommand("copy"); } finally { document.body.removeChild(ta); }
-            }
-            playCue("menuOpen");
-            setCopyToast("Copied");
-            if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
-            copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1400);
-        } catch {
-            setError("Copy failed");
-        }
-    };
-
     const showSeenPopover = (msgId) => {
         setSeenPopoverId(msgId);
         if (seenPopoverTimerRef.current) clearTimeout(seenPopoverTimerRef.current);
         seenPopoverTimerRef.current = setTimeout(() => setSeenPopoverId(null), 1800);
     };
 
+    // Start editing a text message (own text msgs only)
+    const startEditMessage = (msg) => {
+        if (!msg || msg.sender !== role || !msg.text || msg.deletedForEveryone) return;
+        setActiveReactionMessage(null);
+        setEditingMessage({ id: msg.id, originalText: msg.text });
+        setNewMessage(msg.text);
+        setReplyingTo(null);
+        inputRef.current?.focus();
+    };
+
+    const cancelEdit = () => {
+        setEditingMessage(null);
+        setNewMessage("");
+    };
+
+    const saveEdit = async () => {
+        if (!editingMessage) return;
+        const trimmed = newMessage.trim();
+        if (!trimmed) return;
+        const { id, originalText } = editingMessage;
+        if (trimmed === originalText) { cancelEdit(); return; }
+        try {
+            await updateDoc(doc(firestore, "chat-messages", id), {
+                text: trimmed,
+                editedAt: serverTimestamp(),
+                editHistory: arrayUnion({ text: originalText, editedAt: Timestamp.now() }),
+            });
+            haptic.tap();
+            cancelEdit();
+        } catch (err) {
+            console.error("Edit error:", err);
+            setError("Gagal edit pesan");
+        }
+    };
+
     // Filter deleted messages and group
     const visibleMessages = filteredMessages.filter(m =>
         !m.deletedFor?.includes(role)
     );
+
+    // Archived (soft-deleted) messages with preserved content
+    const archivedMessages = useMemo(() => (
+        messages
+            .filter(m => m.deletedForEveryone && m.deletedContent)
+            .sort((a, b) => {
+                const ta = a.deletedAt?.toMillis?.() || 0;
+                const tb = b.deletedAt?.toMillis?.() || 0;
+                return tb - ta;
+            })
+    ), [messages]);
 
     // Derive ordered image list for the lightbox (chronological, same order as render)
     const imageMessages = useMemo(() => (
@@ -1182,11 +1554,21 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => setShowStarred(!showStarred)}
+                        onClick={() => { setShowStarred(!showStarred); setShowArchive(false); haptic.tap(); }}
                         className={`p-2 rounded-full transition-colors ${showStarred ? 'bg-yellow-400 text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                         title="Starred Messages"
                     >
                         ⭐
+                    </motion.button>
+                    {/* Archive (deleted) button */}
+                    <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => { setShowArchive(!showArchive); setShowStarred(false); haptic.tap(); }}
+                        className={`p-2 rounded-full transition-colors ${showArchive ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
+                        title="Pesan terhapus"
+                    >
+                        🗄️
                     </motion.button>
                     {/* Search button */}
                     <motion.button
@@ -1317,27 +1699,43 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 )}
             </AnimatePresence>
 
-            {/* Typing indicator */}
+            {/* Typing indicator — bouncing bubble with 3 animated dots */}
             <AnimatePresence>
                 {otherTyping && (
                     <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="px-4 py-2 bg-[var(--bg-color)]"
+                        className="px-4 py-2"
+                        style={{ background: "var(--bg-color)" }}
                     >
-                        <div className="flex items-center gap-2 text-[13px] text-[var(--text-dim)]">
-                            <span>{role === "haidar" ? "👸 Princess" : "⭐ Haidar"} is typing</span>
-                            <motion.div className="flex gap-0.5">
+                        <div style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 12px",
+                            borderRadius: 999,
+                            background: "var(--bg-secondary)",
+                            border: "1px solid var(--border-color)",
+                        }}>
+                            <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-handwritten)" }}>
+                                {role === "haidar" ? "👸 Princess" : "⭐ Haidar"}
+                            </span>
+                            <span style={{ display: "inline-flex", gap: 3 }}>
                                 {[0, 1, 2].map(i => (
                                     <motion.span
                                         key={i}
-                                        animate={{ opacity: [0.3, 1, 0.3] }}
-                                        transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.2 }}
-                                        className="w-1.5 h-1.5 bg-[var(--text-dim)] rounded-full"
+                                        animate={reducedMotion ? { opacity: 0.6 } : { y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                                        transition={reducedMotion ? { duration: 0 } : { repeat: Infinity, duration: 0.9, delay: i * 0.15, ease: "easeInOut" }}
+                                        style={{
+                                            width: 5, height: 5,
+                                            borderRadius: "50%",
+                                            background: "var(--main-color)",
+                                            display: "inline-block",
+                                        }}
                                     />
                                 ))}
-                            </motion.div>
+                            </span>
                         </div>
                     </motion.div>
                 )}
@@ -1363,12 +1761,23 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
             >
                 {Object.entries(groupedMessages).map(([date, msgs]) => (
                     <div key={date}>
-                        <div style={{ position: 'relative', padding: '16px 0 8px' }}>
-                            <div className="torn-paper-divider" style={{ margin: '0 0 6px' }} />
+                        <div style={{
+                            position: 'sticky', top: 0, zIndex: 5,
+                            padding: '10px 0 6px',
+                            display: 'flex', justifyContent: 'center',
+                            pointerEvents: 'none',
+                        }}>
                             <div style={{
-                                textAlign: 'center', fontSize: 13, color: 'var(--text-dim)',
-                                fontFamily: 'var(--font-handwritten)', fontWeight: 500,
-                                transform: 'rotate(-0.5deg)',
+                                padding: '3px 12px',
+                                borderRadius: 999,
+                                background: 'var(--bg-card)',
+                                border: '1px solid var(--border-color)',
+                                fontSize: 11, color: 'var(--text-dim)',
+                                fontFamily: 'var(--font-handwritten)',
+                                fontWeight: 500,
+                                backdropFilter: 'blur(6px)',
+                                WebkitBackdropFilter: 'blur(6px)',
+                                boxShadow: '0 2px 8px var(--shadow-color)',
                             }}>
                                 {date}
                             </div>
@@ -1430,8 +1839,33 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                     animate={isPulsing ? { opacity: 1, y: 0, scale: [1, 1.04, 1] } : { opacity: 1, y: 0, scale: 1 }}
                                     transition={{ duration: isPulsing ? 0.6 : 0.2, ease: "easeOut" }}
-                                    className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
+                                    className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2 relative`}
+                                    drag={isMobile && !isDeleted ? "x" : false}
+                                    dragDirectionLock
+                                    dragConstraints={{ left: -90, right: 90 }}
+                                    dragElastic={0.15}
+                                    dragSnapToOrigin
+                                    onDragEnd={(_, info) => {
+                                        const offset = info.offset?.x || 0;
+                                        if (Math.abs(offset) >= 60) {
+                                            setReplyingTo(msg);
+                                            haptic.tap();
+                                            setTimeout(() => inputRef.current?.focus(), 80);
+                                        }
+                                    }}
                                 >
+                                    {/* Reveal icon on swipe */}
+                                    {isMobile && (
+                                        <span style={{
+                                            position: "absolute",
+                                            [isMe ? "right" : "left"]: 10,
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            fontSize: 18,
+                                            opacity: 0.4,
+                                            pointerEvents: "none",
+                                        }}>↩️</span>
+                                    )}
                                     <div className="relative max-w-[80%]">
                                         <motion.div
                                             whileTap={{ scale: 0.98 }}
@@ -1514,24 +1948,51 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                     )}
                                                 </>
                                             ) : isVoice ? (
-                                                <div className="flex items-center gap-2 min-w-[150px]">
+                                                <div className="flex items-center gap-2 min-w-[180px]">
                                                     <motion.div
-                                                        animate={playingVoiceId === msg.id ? { scale: [1, 1.2, 1] } : {}}
-                                                        transition={{ repeat: Infinity, duration: 0.5 }}
-                                                        className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"
+                                                        animate={playingVoiceId === msg.id && !reducedMotion ? { scale: [1, 1.15, 1] } : {}}
+                                                        transition={{ repeat: Infinity, duration: 0.8 }}
+                                                        className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0"
                                                     >
                                                         {playingVoiceId === msg.id ? "⏸" : "▶️"}
                                                     </motion.div>
                                                     <div className="flex-1">
-                                                        <div className="flex items-center gap-0.5">
-                                                            {[...Array(12)].map((_, i) => (
-                                                                <motion.div
-                                                                    key={i}
-                                                                    animate={playingVoiceId === msg.id ? { scaleY: [0.3, 1, 0.3] } : { scaleY: 0.5 + Math.random() * 0.5 }}
-                                                                    transition={playingVoiceId === msg.id ? { repeat: Infinity, duration: 0.3, delay: i * 0.05 } : {}}
-                                                                    className="w-1 h-4 bg-white/60 rounded-full"
-                                                                />
-                                                            ))}
+                                                        <div
+                                                            className="flex items-center gap-0.5 cursor-pointer select-none"
+                                                            style={{ height: 20, touchAction: 'pan-y' }}
+                                                            onClick={(e) => {
+                                                                if (playingVoiceId !== msg.id) return;
+                                                                e.stopPropagation();
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                seekVoice((e.clientX - rect.left) / rect.width);
+                                                            }}
+                                                            onPointerMove={(e) => {
+                                                                if (playingVoiceId !== msg.id) return;
+                                                                if (e.buttons !== 1 && !e.pressure) return;
+                                                                e.stopPropagation();
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                seekVoice((e.clientX - rect.left) / rect.width);
+                                                            }}
+                                                        >
+                                                            {[...Array(24)].map((_, i) => {
+                                                                const barFraction = (i + 0.5) / 24;
+                                                                const played = playingVoiceId === msg.id && barFraction <= voiceProgress;
+                                                                // Deterministic pseudo-random height per bar
+                                                                const seed = ((i * 37) % 9) / 9;
+                                                                const h = 0.35 + seed * 0.65;
+                                                                return (
+                                                                    <div
+                                                                        key={i}
+                                                                        style={{
+                                                                            width: 2,
+                                                                            height: `${h * 100}%`,
+                                                                            borderRadius: 1,
+                                                                            background: played ? "#fff" : "rgba(255,255,255,0.35)",
+                                                                            transition: "background 0.12s",
+                                                                        }}
+                                                                    />
+                                                                );
+                                                            })}
                                                         </div>
                                                         <span className="text-[11px] opacity-70">
                                                             {msg.voiceDuration ? `0:${String(msg.voiceDuration).padStart(2, '0')}` : '0:00'}
@@ -1539,10 +2000,21 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p className="text-[15px] leading-relaxed break-words">{formatMessageText(msg.text)}</p>
+                                                <>
+                                                    <p className="text-[15px] leading-relaxed break-words">{formatMessageText(msg.text)}</p>
+                                                    {(() => {
+                                                        const url = extractFirstUrl(msg.text);
+                                                        return url ? <LinkPreview url={url} /> : null;
+                                                    })()}
+                                                </>
                                             )}
                                             {!isSticker && !isVoice && !isImage && (
                                                 <p className="text-[11px] opacity-60 text-right mt-0.5 flex items-center justify-end gap-1">
+                                                    {msg.editedAt && (
+                                                        <span style={{ fontStyle: "italic", opacity: 0.75, fontSize: 10 }} title="Sudah diedit">
+                                                            (edited)
+                                                        </span>
+                                                    )}
                                                     {formatTime(msg.timestamp)}
                                                     {isMe && (
                                                         <span
@@ -1607,7 +2079,26 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
                                         {/* Reactions */}
                                         {reactions.length > 0 && (
-                                            <div className={`absolute -bottom-2 ${isMe ? "right-1" : "left-1"} flex gap-0.5`}>
+                                            <div
+                                                className={`absolute -bottom-2 ${isMe ? "right-1" : "left-1"} flex gap-0.5`}
+                                                onPointerDown={(e) => {
+                                                    e.stopPropagation();
+                                                    if (reactionLongPressTimer.current) clearTimeout(reactionLongPressTimer.current);
+                                                    reactionLongPressTimer.current = setTimeout(() => {
+                                                        setReactionDetail(msg.id);
+                                                        haptic.tap();
+                                                    }, 400);
+                                                }}
+                                                onPointerUp={() => {
+                                                    if (reactionLongPressTimer.current) { clearTimeout(reactionLongPressTimer.current); reactionLongPressTimer.current = null; }
+                                                }}
+                                                onPointerLeave={() => {
+                                                    if (reactionLongPressTimer.current) { clearTimeout(reactionLongPressTimer.current); reactionLongPressTimer.current = null; }
+                                                }}
+                                                onPointerCancel={() => {
+                                                    if (reactionLongPressTimer.current) { clearTimeout(reactionLongPressTimer.current); reactionLongPressTimer.current = null; }
+                                                }}
+                                            >
                                                 {[...new Set(reactions.map(r => r.emoji))].slice(0, 4).map((emoji, i) => (
                                                     <motion.span
                                                         key={i}
@@ -1621,6 +2112,61 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                 ))}
                                             </div>
                                         )}
+
+                                        {/* Reaction detail popover — who reacted what */}
+                                        <AnimatePresence>
+                                            {reactionDetail === msg.id && reactions.length > 0 && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                                                    transition={{ duration: 0.14 }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        [isMe ? 'right' : 'left']: 0,
+                                                        bottom: -60,
+                                                        padding: '6px 10px',
+                                                        background: 'var(--bg-card)',
+                                                        border: '1px solid var(--border-color)',
+                                                        borderRadius: 'var(--radius-card)',
+                                                        boxShadow: '0 4px 16px var(--shadow-color)',
+                                                        zIndex: 25,
+                                                        minWidth: 140,
+                                                    }}
+                                                >
+                                                    {(() => {
+                                                        // Group by emoji → [users]
+                                                        const grouped = reactions.reduce((acc, r) => {
+                                                            if (!acc[r.emoji]) acc[r.emoji] = [];
+                                                            if (!acc[r.emoji].includes(r.user)) acc[r.emoji].push(r.user);
+                                                            return acc;
+                                                        }, {});
+                                                        return Object.entries(grouped).map(([em, users]) => (
+                                                            <div key={em} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', fontSize: 12, color: 'var(--text-color)' }}>
+                                                                <span style={{ fontSize: 14 }}>{em}</span>
+                                                                <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-handwritten)' }}>
+                                                                    {users.map(u => u === "haidar" ? "Haidar" : "Princess").join(" · ")}
+                                                                </span>
+                                                            </div>
+                                                        ));
+                                                    })()}
+                                                    <button
+                                                        onClick={() => setReactionDetail(null)}
+                                                        style={{
+                                                            marginTop: 4, width: '100%',
+                                                            padding: '2px 0',
+                                                            fontSize: 10, color: 'var(--text-dim)',
+                                                            background: 'transparent', border: 'none',
+                                                            cursor: 'pointer',
+                                                            fontFamily: 'var(--font-mono)',
+                                                        }}
+                                                    >
+                                                        tutup
+                                                    </button>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
 
                                         {/* Quick reactions popup */}
                                         <AnimatePresence>
@@ -1654,12 +2200,22 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                                 {emoji}
                                                             </motion.button>
                                                         ))}
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.2 }}
+                                                            whileTap={{ scale: 0.9 }}
+                                                            onClick={(e) => { e.stopPropagation(); setReactionEmojiPicker(msg.id); }}
+                                                            className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
+                                                            title="More emojis"
+                                                            style={{ fontSize: 14, opacity: 0.8 }}
+                                                        >
+                                                            ➕
+                                                        </motion.button>
                                                         <div className="w-px bg-[rgba(255,255,255,0.1)] mx-0.5" />
                                                         {/* Actions - icons only */}
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveReactionMessage(null); inputRef.current?.focus(); }}
+                                                            onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveReactionMessage(null); inputRef.current?.focus(); haptic.tap(); }}
                                                             className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
                                                             title="Reply"
                                                         >
@@ -1668,45 +2224,51 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            onClick={(e) => { e.stopPropagation(); toggleStar(msg.id); setActiveReactionMessage(null); }}
+                                                            onClick={(e) => { e.stopPropagation(); toggleStar(msg.id); setActiveReactionMessage(null); haptic.tap(); }}
                                                             className={`text-base p-0.5 rounded-full transition-colors ${msg.starred ? 'bg-yellow-200' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
                                                             title={msg.starred ? "Unstar" : "Star"}
                                                         >
                                                             ⭐
                                                         </motion.button>
-                                                        {msg.text && (
+                                                        {isMe && msg.text && !msg.image && !msg.sticker && !msg.voiceMessage && (
                                                             <motion.button
                                                                 whileHover={{ scale: 1.2 }}
                                                                 whileTap={{ scale: 0.9 }}
-                                                                onClick={(e) => { e.stopPropagation(); copyMessageText(msg.text); setActiveReactionMessage(null); }}
+                                                                onClick={(e) => { e.stopPropagation(); startEditMessage(msg); }}
                                                                 className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
-                                                                title="Copy text"
+                                                                title="Edit"
                                                             >
-                                                                📋
+                                                                ✏️
                                                             </motion.button>
                                                         )}
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, false); }}
+                                                            onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id); }}
                                                             className="text-base p-0.5 hover:bg-red-100 rounded-full transition-colors"
-                                                            title="Delete for me"
+                                                            title="Hapus pesan"
                                                         >
                                                             🗑️
                                                         </motion.button>
-                                                        {isMe && (
-                                                            <motion.button
-                                                                whileHover={{ scale: 1.2 }}
-                                                                whileTap={{ scale: 0.9 }}
-                                                                onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id, true); }}
-                                                                className="text-xs p-0.5 hover:bg-red-100 rounded-full transition-colors"
-                                                                style={{ color: 'var(--error-color)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
-                                                                title="Delete for everyone"
-                                                            >
-                                                                ✕all
-                                                            </motion.button>
-                                                        )}
                                                     </div>
+
+                                                    {/* Inline emoji picker (+) expansion */}
+                                                    {reactionEmojiPicker === msg.id && (
+                                                        <div
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            style={{ marginTop: 6, width: 300 }}
+                                                        >
+                                                            <ChatEmojiPicker
+                                                                compact
+                                                                onPick={(emoji) => {
+                                                                    toggleReaction(msg.id, emoji);
+                                                                    setReactionEmojiPicker(null);
+                                                                    setActiveReactionMessage(null);
+                                                                    haptic.tap();
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
@@ -1720,6 +2282,44 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 <div ref={messagesEndRef} />
             </div>
 
+            {/* Jump-to-unread pill — appears when user scrolled up + has unread */}
+            <AnimatePresence>
+                {!isNearBottomState && unreadCount > 0 && (
+                    <motion.button
+                        initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 380, damping: 24 }}
+                        onClick={() => {
+                            haptic.tap();
+                            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        style={{
+                            position: "absolute",
+                            bottom: 88,
+                            right: 16,
+                            zIndex: 35,
+                            padding: "6px 14px",
+                            borderRadius: 999,
+                            background: "var(--main-color)",
+                            color: "var(--bg-color)",
+                            border: "none",
+                            fontFamily: "var(--font-handwritten)",
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            boxShadow: "0 4px 16px var(--shadow-color)",
+                            whiteSpace: "nowrap",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                        }}
+                    >
+                        ↓ {unreadCount} {unreadCount === 1 ? "pesan baru" : "pesan baru"}
+                    </motion.button>
+                )}
+            </AnimatePresence>
+
             {/* Emoji picker */}
             <AnimatePresence>
                 {showEmojiPicker && (
@@ -1728,20 +2328,13 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="overflow-hidden bg-[var(--bg-color)] border-t border-[rgba(255,255,255,0.08)]"
+                        className="overflow-hidden border-t"
+                        style={{ background: "var(--bg-color)", borderColor: "var(--border-color)" }}
                     >
-                        <div className="grid grid-cols-8 gap-1 p-3 max-h-32 overflow-y-auto">
-                            {COMMON_EMOJIS.map((emoji) => (
-                                <motion.button
-                                    key={emoji}
-                                    whileHover={{ scale: 1.2 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    onClick={() => { setNewMessage(prev => prev + emoji); inputRef.current?.focus(); }}
-                                    className="text-xl p-1 rounded-lg hover:bg-[rgba(255,255,255,0.08)] transition-colors"
-                                >
-                                    {emoji}
-                                </motion.button>
-                            ))}
+                        <div style={{ padding: 8 }}>
+                            <ChatEmojiPicker
+                                onPick={(emoji) => { setNewMessage(prev => prev + emoji); inputRef.current?.focus(); }}
+                            />
                         </div>
                     </motion.div>
                 )}
@@ -1980,7 +2573,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-end gap-2">
                         {/* Image upload */}
                         <motion.button
                             type="button"
@@ -2009,23 +2602,66 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         >
                             😊
                         </motion.button>
-                        <input
+                        <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setShowScheduleModal(true)}
+                            disabled={!newMessage.trim()}
+                            className="p-2.5 rounded-full transition-colors hover:bg-[rgba(255,255,255,0.08)] disabled:opacity-40"
+                            title="Jadwalkan pengiriman"
+                        >
+                            ⏰
+                        </motion.button>
+                        <textarea
                             ref={inputRef}
-                            type="text"
                             value={newMessage}
                             onChange={handleInputChange}
                             onBlur={handleInputBlur}
-                            placeholder={replyingTo ? "Reply..." : "Message..."}
+                            onKeyDown={(e) => {
+                                if (e.key === "Escape") {
+                                    if (editingMessage) { e.preventDefault(); cancelEdit(); return; }
+                                    if (replyingTo) { e.preventDefault(); setReplyingTo(null); return; }
+                                }
+                                if (e.key === "Enter" && !e.shiftKey && !isMobile) {
+                                    e.preventDefault();
+                                    sendMessage(e);
+                                }
+                            }}
+                            onInput={(e) => {
+                                const el = e.currentTarget;
+                                el.style.height = "auto";
+                                el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+                            }}
+                            placeholder={editingMessage ? "Edit pesan…" : replyingTo ? "Balas…" : "Pesan…"}
                             autoComplete="off"
-                            className="flex-1 transition-all"
+                            rows={1}
+                            className="flex-1 transition-all resize-none"
                             style={{
-                                padding: '12px 16px', borderRadius: 'var(--radius-card)',
+                                padding: '10px 16px', borderRadius: 'var(--radius-card)',
                                 background: 'var(--bg-secondary)', color: 'var(--text-color)',
-                                border: '1px solid var(--border-color)',
+                                border: `1px solid ${editingMessage ? 'var(--main-color)' : 'var(--border-color)'}`,
                                 outline: 'none', fontSize: 15,
                                 fontFamily: 'var(--font-body)',
+                                lineHeight: 1.4,
+                                maxHeight: 140,
+                                overflowY: 'auto',
+                                minHeight: 42,
                             }}
                         />
+                        {editingMessage && (
+                            <motion.button
+                                type="button"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={cancelEdit}
+                                className="p-2 rounded-full"
+                                style={{ background: 'var(--bg-card)', color: 'var(--text-dim)', border: '1px solid var(--border-color)' }}
+                                title="Batal edit"
+                            >
+                                ✕
+                            </motion.button>
+                        )}
                         {newMessage.trim() ? (
                             <motion.button
                                 type="submit"
@@ -2125,12 +2761,194 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 )}
             </AnimatePresence>
 
+            {/* Archive Panel */}
+            <AnimatePresence>
+                {showArchive && (
+                    <ChatArchivePanel
+                        items={archivedMessages}
+                        onClose={() => setShowArchive(false)}
+                        onRestore={restoreFromArchive}
+                    />
+                )}
+            </AnimatePresence>
+
             {/* Audio Call Modal */}
             <AudioCall
                 role={role}
                 isOpen={isCallOpen}
                 onClose={() => setIsCallOpen(false)}
             />
+
+            {/* Schedule message modal */}
+            <AnimatePresence>
+                {showScheduleModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowScheduleModal(false)}
+                        style={{
+                            position: "absolute", inset: 0,
+                            background: "rgba(0,0,0,0.55)",
+                            backdropFilter: "blur(6px)",
+                            WebkitBackdropFilter: "blur(6px)",
+                            zIndex: 55,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            padding: 20,
+                        }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.92, opacity: 0, y: 10 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.92, opacity: 0, y: 10 }}
+                            transition={{ type: "spring", damping: 22, stiffness: 340 }}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                                width: "min(340px, 100%)",
+                                padding: 20,
+                                borderRadius: "var(--radius-card)",
+                                background: "var(--bg-card)",
+                                border: "1px solid var(--border-color)",
+                                boxShadow: "0 20px 60px var(--shadow-color)",
+                            }}
+                        >
+                            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "var(--font-handwritten)", marginBottom: 12, color: "var(--text-on-card)" }}>
+                                ⏰ Jadwalkan pengiriman
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 12, fontFamily: "var(--font-handwritten)" }}>
+                                Pilih kapan pesan ini dikirim. Minimal 30 detik dari sekarang.
+                            </div>
+                            <input
+                                type="datetime-local"
+                                defaultValue={(() => {
+                                    const d = new Date(Date.now() + 5 * 60000);
+                                    d.setSeconds(0, 0);
+                                    const pad = (n) => String(n).padStart(2, "0");
+                                    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                                })()}
+                                onChange={(e) => { e.currentTarget.dataset.val = e.currentTarget.value; }}
+                                style={{
+                                    width: "100%",
+                                    padding: "10px 12px",
+                                    borderRadius: "var(--radius-card)",
+                                    background: "var(--bg-secondary)",
+                                    color: "var(--text-color)",
+                                    border: "1px solid var(--border-color)",
+                                    fontSize: 14,
+                                    marginBottom: 16,
+                                    fontFamily: "var(--font-body)",
+                                }}
+                                id="schedule-datetime-input"
+                            />
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <button
+                                    onClick={() => setShowScheduleModal(false)}
+                                    style={{
+                                        flex: 1, padding: "8px 12px", borderRadius: 8,
+                                        background: "transparent",
+                                        border: "1px solid var(--border-color)",
+                                        color: "var(--text-dim)",
+                                        cursor: "pointer", fontSize: 13,
+                                        fontFamily: "var(--font-handwritten)",
+                                    }}
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const input = document.getElementById("schedule-datetime-input");
+                                        if (!input) return;
+                                        const val = input.value || input.dataset.val;
+                                        if (!val) return;
+                                        scheduleMessage(new Date(val));
+                                    }}
+                                    style={{
+                                        flex: 1, padding: "8px 12px", borderRadius: 8,
+                                        background: "var(--main-color)", color: "var(--bg-color)",
+                                        border: "none", cursor: "pointer",
+                                        fontSize: 13, fontWeight: 700,
+                                        fontFamily: "var(--font-handwritten)",
+                                    }}
+                                >
+                                    Jadwalkan
+                                </button>
+                            </div>
+                            {scheduledMessages.length > 0 && (
+                                <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-color)" }}>
+                                    <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6, fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
+                                        TERJADWAL ({scheduledMessages.length})
+                                    </div>
+                                    <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                                        {scheduledMessages.map(s => {
+                                            const at = s.scheduledAt?.toDate ? s.scheduledAt.toDate() : null;
+                                            return (
+                                                <div
+                                                    key={s.id}
+                                                    style={{
+                                                        padding: 8,
+                                                        background: "var(--bg-secondary)",
+                                                        border: "1px solid var(--border-color)",
+                                                        borderRadius: 8,
+                                                        display: "flex", alignItems: "center", gap: 8,
+                                                    }}
+                                                >
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                                                            {at ? at.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: "var(--text-color)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                            {s.text || "—"}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => cancelScheduled(s.id)}
+                                                        style={{
+                                                            padding: "4px 8px", borderRadius: 6,
+                                                            background: "transparent",
+                                                            color: "var(--error-color)",
+                                                            border: "1px solid var(--border-color)",
+                                                            fontSize: 11, cursor: "pointer",
+                                                        }}
+                                                    >
+                                                        Batal
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Scheduled sent chip */}
+            <AnimatePresence>
+                {scheduledDraft && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        style={{
+                            position: "absolute",
+                            bottom: 84, left: "50%",
+                            transform: "translateX(-50%)",
+                            zIndex: 45,
+                            padding: "6px 14px", borderRadius: 999,
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--main-color)",
+                            color: "var(--main-color)",
+                            fontFamily: "var(--font-handwritten)",
+                            fontSize: 12, whiteSpace: "nowrap",
+                            boxShadow: "0 4px 16px var(--shadow-color)",
+                            pointerEvents: "none",
+                        }}
+                    >
+                        ⏰ Terjadwal untuk {new Date(scheduledDraft.at).toLocaleString([], { hour: "2-digit", minute: "2-digit" })}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Floating nudge banner — shown for a couple seconds when partner pings */}
             <AnimatePresence>
@@ -2171,20 +2989,63 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 />
             ))}
 
-            {/* Copy-to-clipboard toast */}
+            {/* Undo-delete toast — click Undo to restore within 5s */}
             <AnimatePresence>
-                {copyToast && (
+                {undoState && (
                     <motion.div
-                        initial={{ opacity: 0, y: 10 }}
+                        initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        transition={{ duration: 0.18 }}
+                        exit={{ opacity: 0, y: 12 }}
+                        transition={{ duration: 0.2 }}
                         style={{
-                            position: "absolute", bottom: 82, left: "50%",
-                            transform: "translateX(-50%)", zIndex: 45,
-                            padding: "8px 18px", borderRadius: 999,
+                            position: "absolute", bottom: 88, left: "50%",
+                            transform: "translateX(-50%)", zIndex: 48,
+                            padding: "8px 8px 8px 16px",
+                            borderRadius: 999,
                             background: "var(--bg-card)",
                             border: "1px solid var(--border-color)",
+                            color: "var(--text-color)",
+                            fontFamily: "var(--font-handwritten)",
+                            fontSize: 13, whiteSpace: "nowrap",
+                            boxShadow: "0 4px 20px var(--shadow-color)",
+                            display: "flex", alignItems: "center", gap: 12,
+                        }}
+                    >
+                        <span>Pesan dihapus</span>
+                        <button
+                            onClick={undoDelete}
+                            style={{
+                                padding: "4px 14px",
+                                borderRadius: 999,
+                                background: "var(--main-color)",
+                                color: "var(--bg-color)",
+                                border: "none",
+                                fontFamily: "var(--font-handwritten)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                            }}
+                        >
+                            Undo
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Screenshot notification toast */}
+            <AnimatePresence>
+                {screenshotToast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        style={{
+                            position: "absolute", top: 68, left: "50%",
+                            transform: "translateX(-50%)", zIndex: 46,
+                            padding: "6px 14px", borderRadius: 999,
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--main-color)",
                             color: "var(--main-color)",
                             fontFamily: "var(--font-handwritten)",
                             fontSize: 13, whiteSpace: "nowrap",
@@ -2192,7 +3053,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                             pointerEvents: "none",
                         }}
                     >
-                        {copyToast}
+                        📸 {screenshotToast}
                     </motion.div>
                 )}
             </AnimatePresence>

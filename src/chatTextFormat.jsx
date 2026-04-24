@@ -2,6 +2,13 @@ import React from 'react';
 
 const URL_RE = /(https?:\/\/[^\s<>]+)/g;
 
+/** Return the first HTTP(S) URL found in `input`, or null. */
+export function extractFirstUrl(input) {
+    if (!input) return null;
+    const match = String(input).match(/https?:\/\/[^\s<>]+/);
+    return match ? match[0] : null;
+}
+
 const PATTERNS = [
     { regex: /`([^`\n]+?)`/, type: 'code' },
     { regex: /\*\*(\S(?:[^*\n]*?\S)?)\*\*/, type: 'bold' },
