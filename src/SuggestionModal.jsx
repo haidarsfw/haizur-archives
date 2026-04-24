@@ -15,7 +15,8 @@ import {
 } from "firebase/firestore";
 import { firestore } from "./firebase";
 
-const EXAMPLE_SUGGESTION = "kakak mau buat memori yang bikin azhura engga lupain, mau yang memorable sampe azhura gabisa lupain, yaa walau pelupa.. <3";
+const PLACEHOLDER_EXAMPLE = "adainn tema yang lucu kak biar vibesnya engga sedih..";
+const SPECIAL_NOTE = "kakak mau buat memori yang bikin azhura engga lupain, mau yang memorable sampe azhura gabisa lupain, yaa walau pelupa.. <3";
 
 function formatTs(ts) {
     if (!ts) return "";
@@ -170,7 +171,7 @@ export default function SuggestionModal({ currentRole, onClose }) {
                                 color: "var(--text-on-card)",
                                 lineHeight: 1.15,
                             }}>
-                                Saran & pesan manis
+                                Saran / pesan
                             </div>
                             <div style={{
                                 fontSize: 12,
@@ -179,7 +180,7 @@ export default function SuggestionModal({ currentRole, onClose }) {
                                 marginTop: 2,
                                 lineHeight: 1.35,
                             }}>
-                                Tulis saran, ide, atau pesan untuk partnermu. Dia bakal lihat saat buka tombol ✉️ ini juga.
+                                Tulis saran atau pesan untuk partnermu. Dia bakal lihat saat buka tombol ✉️ ini juga.
                             </div>
                         </div>
                         <button
@@ -209,7 +210,7 @@ export default function SuggestionModal({ currentRole, onClose }) {
                             ref={textareaRef}
                             value={text}
                             onChange={(e) => setText(e.target.value)}
-                            placeholder={EXAMPLE_SUGGESTION}
+                            placeholder={PLACEHOLDER_EXAMPLE}
                             rows={3}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -237,15 +238,16 @@ export default function SuggestionModal({ currentRole, onClose }) {
                             marginTop: 10,
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "space-between",
+                            justifyContent: "flex-end",
                             gap: 10,
                         }}>
                             <span style={{
                                 fontSize: 10.5, color: "var(--text-dim)",
                                 fontFamily: "var(--font-mono)",
                                 letterSpacing: "0.04em",
+                                marginRight: "auto",
                             }}>
-                                {text.length > 0 ? `${text.length} karakter` : `contoh: "${EXAMPLE_SUGGESTION.slice(0, 42)}…"`}
+                                {text.length > 0 ? `${text.length} karakter` : "Klik kotak di atas untuk mulai menulis"}
                             </span>
                             <button
                                 onClick={handleSubmit}
@@ -266,6 +268,42 @@ export default function SuggestionModal({ currentRole, onClose }) {
                                 {sending ? "Mengirim…" : "Kirim ✉️"}
                             </button>
                         </div>
+
+                        {/* Special note — pinned love-letter style */}
+                        <div style={{
+                            marginTop: 12,
+                            padding: "10px 12px",
+                            borderRadius: "var(--radius-card)",
+                            background: "rgba(212, 160, 84, 0.06)",
+                            border: "1px dashed var(--main-color)",
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "flex-start",
+                        }}>
+                            <span style={{ fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>💌</span>
+                            <div>
+                                <div style={{
+                                    fontSize: 10,
+                                    letterSpacing: "0.08em",
+                                    color: "var(--main-color)",
+                                    fontFamily: "var(--font-mono)",
+                                    fontWeight: 700,
+                                    marginBottom: 4,
+                                }}>
+                                    CATATAN KECIL
+                                </div>
+                                <div style={{
+                                    fontSize: 12.5,
+                                    color: "var(--text-color)",
+                                    fontFamily: "var(--font-handwritten)",
+                                    fontStyle: "italic",
+                                    lineHeight: 1.5,
+                                }}>
+                                    “{SPECIAL_NOTE}”
+                                </div>
+                            </div>
+                        </div>
+
                         {error && (
                             <div style={{
                                 marginTop: 8,

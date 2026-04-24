@@ -770,7 +770,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => { setShowSuggestions(true); dismissHint(); }}
-                aria-label="Saran & pesan manis"
+                aria-label="Saran / pesan"
                 style={{
                     position: "fixed",
                     top: isMobile ? 18 : 26,
@@ -851,7 +851,7 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                             transform: "rotate(45deg)",
                         }} />
                         <div style={{ fontWeight: 700, color: "var(--main-color)", marginBottom: 2 }}>✉️ Kotak saran</div>
-                        Tulis saran atau pesan manis di sini — partnermu baca di tombol yang sama.
+                        Tulis saran atau pesan di sini — kalian berdua bisa lihat saran satu sama lain.
                     </motion.div>
                 )}
             </AnimatePresence>

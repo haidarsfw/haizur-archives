@@ -14,7 +14,7 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Tombol ✉️ glowing di landing — kotak saran, tulis pesan manis untuk partner",
+    "Tombol ✉️ glowing di landing — kotak saran, kita bisa tulis + baca saran partner",
     "Sticker tanggal di chat dibuat lebih kecil + nempel tipis di atas, ga ganggu lagi",
     "Tombol hapus satu aja — hapus untuk berdua, ada Undo 5 detik",
     "Panel 🗄️ buat lihat + pulihkan pesan yang udah dihapus",
