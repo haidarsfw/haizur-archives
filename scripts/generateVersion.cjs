@@ -14,11 +14,11 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Fix BESAR: chat query sekarang ambil 500 pesan terbaru (dulu 500 terlama — pesan baru ilang),",
-    "Fix: cache-snapshot Firestore yang basi ga flash lagi di awal load",
-    "Fix: focus input ga lompatin scroll container — `preventScroll: true`",
-    "Enter-animation pesan dimatiin — bubble ga muncul ulang pas reaction/receipt update",
-    "Presence: heartbeat 10s + activity bumps, online dot bener-bener decay",
+    "Sticky-scroll: chat ngunci ke jarak-dari-bawah lewat useLayoutEffect. Ga jumps lagi.",
+    "Limit chat naik ke 2000 pesan — pesan lama tetap visible, ga keapus",
+    "Snap ke bawah pas kirim/terima pesan kalau lagi di bawah",
+    "Bubble animation off 100% — reaksi/receipt update ga nge-replay animasi",
+    "focus() pake preventScroll, scroll-anchor disabled di container",
 ];
 
 const payload = {

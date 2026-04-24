@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { firestore } from "./firebase";
 import {
@@ -326,11 +326,13 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         // Previously this was `asc + limit(500)` which returns the OLDEST 500
         // messages once the collection grows past 500 — new messages silently
         // stopped appearing and the chat looked "stuck in the past". Ordering
-        // by desc ensures we always pin the most-recent window.
+        // by desc ensures we always pin the most-recent window. Limit bumped
+        // to 2000 so older messages stay visible to the user (history is
+        // never deleted, just paginated client-side).
         const q = query(
             collection(firestore, "chat-messages"),
             orderBy("timestamp", "desc"),
-            limit(500)
+            limit(2000)
         );
 
         const unsubscribe = onSnapshot(q,
@@ -359,6 +361,15 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         const name = latest.sender === "princess" ? "Princess 👸" : "Haidar ⭐";
                         showNotification(name, latest.text || latest.sticker);
                         if (soundEnabledRef.current) soundsRef.current?.play("messageReceive");
+                        // If the user was at the bottom when partner's message
+                        // arrives, stick to bottom. sticky-scroll preserves
+                        // distance-from-bottom so this is already the natural
+                        // behaviour, but set the flag for extra safety.
+                        const c = messagesContainerRef.current;
+                        if (c) {
+                            const dist = c.scrollHeight - c.scrollTop - c.clientHeight;
+                            if (dist < NEAR_BOTTOM_PX) justSentRef.current = true;
+                        }
                     }
                 }
                 lastMessageCountRef.current = msgs.length;
@@ -382,31 +393,53 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         };
     }, [role, showNotification]);
 
-    // Auto-scroll — only if user is already near the bottom, and only when a
-    // new message arrives (not on read-receipt / reaction updates).
-    // Uses container.scrollTop directly instead of scrollIntoView so the
-    // outer page/viewport is never disturbed (fixes mobile jump-up glitch
-    // where soft-keyboard resize + scrollIntoView fought each other).
-    const lastScrollSyncCountRef = useRef(0);
-    useEffect(() => {
-        const container = messagesContainerRef.current;
-        if (!container) return;
-        const prevCount = lastScrollSyncCountRef.current;
-        lastScrollSyncCountRef.current = messages.length;
-        if (messages.length === prevCount) return;
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        const isNearBottom = distanceFromBottom < NEAR_BOTTOM_PX;
-        if (prevCount !== 0 && !isNearBottom) return;
-        const run = () => {
-            const c = messagesContainerRef.current;
-            if (!c) return;
-            // Always instant — smooth scroll races with multiple rapid
-            // snapshot updates, looking like the chat "jumps" randomly.
+    // ── Sticky-scroll anchor ──────────────────────────────────────────────
+    // The "chat keeps jumping to old messages" symptom was caused by the
+    // browser's native scroll anchoring + any mid-render layout shift
+    // (reaction badge appearing, read receipt flipping, avatar dot updating
+    //  → scrollHeight changes → browser tries to "keep the top visible" and
+    //  pulls scrollTop backwards).
+    //
+    // Strategy: record the user's distance-from-bottom just BEFORE React
+    // mutates the DOM (useLayoutEffect without deps = runs each render), and
+    // restore the same distance-from-bottom right AFTER. This way:
+    //   - User at bottom → stays pinned to bottom on new content
+    //   - User scrolled up to Dec 19 → stays pinned to Dec 19
+    //   - Internal render-induced height shifts are absorbed silently
+    const scrollFromBottomRef = useRef(0);
+    const firstRenderRef = useRef(true);
+    const justSentRef = useRef(false);
+
+    // Capture BEFORE paint
+    useLayoutEffect(() => {
+        const c = messagesContainerRef.current;
+        if (!c) return;
+        scrollFromBottomRef.current = c.scrollHeight - c.scrollTop - c.clientHeight;
+    });
+
+    // Restore AFTER paint — runs after every render so no snapshot can pull
+    // the view to an old message behind our backs.
+    useLayoutEffect(() => {
+        const c = messagesContainerRef.current;
+        if (!c) return;
+        if (firstRenderRef.current && messages.length > 0) {
+            firstRenderRef.current = false;
+            c.scrollTop = c.scrollHeight; // initial: snap to bottom
+            return;
+        }
+        if (justSentRef.current) {
+            justSentRef.current = false;
             c.scrollTop = c.scrollHeight;
-        };
-        // Double-RAF: wait for layout + paint so height includes the new message
-        requestAnimationFrame(() => requestAnimationFrame(run));
-    }, [messages]);
+            return;
+        }
+        const targetTop = c.scrollHeight - scrollFromBottomRef.current - c.clientHeight;
+        const current = c.scrollTop;
+        // Only write if delta > 1px — avoid gratuitous writes that can
+        // interrupt user momentum-scrolls on iOS.
+        if (Math.abs(current - targetTop) > 1) {
+            c.scrollTop = Math.max(0, targetTop);
+        }
+    });
 
     // Track scroll position so jump-to-unread pill knows when to show
     useEffect(() => {
@@ -423,26 +456,8 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         };
         container.addEventListener("scroll", onScroll, { passive: true });
         onScroll();
-
-        // When tab becomes visible again, if we were at the bottom, snap back.
-        // Prevents the container scrollTop being "restored" to an old offset.
-        let wasNearBottom = true;
-        const onVisible = () => {
-            if (!document.hidden && messagesContainerRef.current && wasNearBottom) {
-                const c = messagesContainerRef.current;
-                c.scrollTop = c.scrollHeight;
-            }
-            if (document.hidden && messagesContainerRef.current) {
-                const c = messagesContainerRef.current;
-                const distance = c.scrollHeight - c.scrollTop - c.clientHeight;
-                wasNearBottom = distance < NEAR_BOTTOM_PX;
-            }
-        };
-        document.addEventListener("visibilitychange", onVisible);
-
         return () => {
             container.removeEventListener("scroll", onScroll);
-            document.removeEventListener("visibilitychange", onVisible);
             if (frame) cancelAnimationFrame(frame);
         };
     }, []);
@@ -816,6 +831,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
         const reply = replyingTo;
         setNewMessage("");
+        justSentRef.current = true; // tell sticky-scroll to snap to bottom
         // Cancel any pending draft auto-save so it doesn't re-write stale text
         // back to localStorage after we just cleared it.
         if (draftSaveTimerRef.current) { clearTimeout(draftSaveTimerRef.current); draftSaveTimerRef.current = null; }
@@ -953,6 +969,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const sendSticker = async (sticker) => {
         if (!role) return;
         setShowStickerPicker(false);
+        justSentRef.current = true;
         playSendSound();
         haptic.pop();
         try {
@@ -990,6 +1007,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 reader.onloadend = async () => {
                     const base64Audio = reader.result;
                     try {
+                        justSentRef.current = true;
                         await addDoc(collection(firestore, "chat-messages"), {
                             voiceMessage: base64Audio,
                             voiceDuration: recordingTime,
@@ -1254,6 +1272,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
             });
             setImagePreview(null);
             setNewMessage("");
+            justSentRef.current = true;
             if (draftSaveTimerRef.current) { clearTimeout(draftSaveTimerRef.current); draftSaveTimerRef.current = null; }
             try { const key = draftKey(); if (key) localStorage.removeItem(key); } catch { /* noop */ }
             if (inputRef.current) inputRef.current.style.height = "auto";
