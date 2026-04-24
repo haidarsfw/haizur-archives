@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 import { firestore } from "./firebase";
 
-const PLACEHOLDER_EXAMPLE = "adainn tema yang lucu kak biar vibesnya engga sedih..";
+const PLACEHOLDER_EXAMPLE = `contoh: "adainn tema yang lucu kak biar vibesnya engga sedih.."`;
 const SPECIAL_NOTE = "kakak mau buat memori yang bikin azhura engga lupain, mau yang memorable sampe azhura gabisa lupain, yaa walau pelupa.. <3";
 
 function formatTs(ts) {
@@ -271,16 +271,17 @@ export default function SuggestionModal({ currentRole, onClose }) {
 
                         {/* Special note — pinned love-letter style */}
                         <div style={{
-                            marginTop: 12,
-                            padding: "10px 12px",
+                            marginTop: 14,
+                            padding: "14px 16px",
                             borderRadius: "var(--radius-card)",
-                            background: "rgba(212, 160, 84, 0.06)",
-                            border: "1px dashed var(--main-color)",
+                            background: "rgba(212, 160, 84, 0.08)",
+                            border: "1px solid rgba(212, 160, 84, 0.35)",
                             display: "flex",
-                            gap: 10,
+                            gap: 12,
                             alignItems: "flex-start",
+                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.02)",
                         }}>
-                            <span style={{ fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>💌</span>
+                            <span style={{ fontSize: 20, lineHeight: 1.2, flexShrink: 0 }}>💌</span>
                             <div>
                                 <div style={{
                                     fontSize: 10,
@@ -288,16 +289,18 @@ export default function SuggestionModal({ currentRole, onClose }) {
                                     color: "var(--main-color)",
                                     fontFamily: "var(--font-mono)",
                                     fontWeight: 700,
-                                    marginBottom: 4,
+                                    marginBottom: 6,
                                 }}>
                                     CATATAN KECIL
                                 </div>
                                 <div style={{
-                                    fontSize: 12.5,
+                                    fontSize: 18,
                                     color: "var(--text-color)",
-                                    fontFamily: "var(--font-handwritten)",
+                                    fontFamily: "'Dancing Script', 'Brush Script MT', cursive",
                                     fontStyle: "italic",
-                                    lineHeight: 1.5,
+                                    fontWeight: 500,
+                                    lineHeight: 1.45,
+                                    letterSpacing: "0.005em",
                                 }}>
                                     “{SPECIAL_NOTE}”
                                 </div>
