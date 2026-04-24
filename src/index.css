@@ -1312,6 +1312,23 @@ body.skip-entry-anims *::after {
   }
 }
 
+@keyframes suggestionPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(212, 160, 84, 0.55), 0 8px 28px rgba(0, 0, 0, 0.35);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(212, 160, 84, 0), 0 10px 32px rgba(0, 0, 0, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="suggestionPulse"] {
+    animation: none !important;
+  }
+}
+
 @keyframes warm-float {
   0% {
     transform: translateY(0) rotate(0deg);

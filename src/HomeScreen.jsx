@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { firestore } from './firebase';
 import { loadStats, loadHistoryByDateStandalone as loadHistoryByDate, releaseCache, PLATFORMS, SPEAKERS } from './dataLoader';
 import PlatformIcon, { SecondaryBadge } from './PlatformIcons';
+import SuggestionModal from './SuggestionModal';
 
 // IG account mapping: speakerRaw -> { handle, isSecondary }
 const IG_ACCOUNTS = {
@@ -359,6 +362,43 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
     const [historyByDate, setHistoryByDate] = useState(null);
     const [randomQuote, setRandomQuote] = useState(null);
     const [funFacts, setFunFacts] = useState(STATIC_FUN_FACTS);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [showSuggestionHint, setShowSuggestionHint] = useState(false);
+    const [unreadSuggestions, setUnreadSuggestions] = useState(0);
+
+    // Normalize app role to chat-role convention so suggestions stay consistent
+    const suggestionRole = currentUser === 'haidar' ? 'haidar' : 'princess';
+
+    // Subscribe to unread suggestions (authored by partner, not yet read by me)
+    useEffect(() => {
+        const q = query(collection(firestore, 'suggestions'), orderBy('timestamp', 'desc'));
+        const unsub = onSnapshot(q, (snap) => {
+            const count = snap.docs.reduce((acc, d) => {
+                const data = d.data();
+                if (data.sender && data.sender !== suggestionRole) {
+                    if (!(data.readBy || []).includes(suggestionRole)) acc += 1;
+                }
+                return acc;
+            }, 0);
+            setUnreadSuggestions(count);
+        }, (err) => { console.log('suggestion badge:', err?.message); });
+        return () => unsub();
+    }, [suggestionRole]);
+
+    // First-visit hint tooltip
+    useEffect(() => {
+        try {
+            const seen = localStorage.getItem('haizur-suggestion-hint-seen');
+            if (!seen) {
+                setTimeout(() => setShowSuggestionHint(true), 1800);
+            }
+        } catch { /* noop */ }
+    }, []);
+
+    const dismissHint = () => {
+        setShowSuggestionHint(false);
+        try { localStorage.setItem('haizur-suggestion-hint-seen', '1'); } catch { /* noop */ }
+    };
 
     useEffect(() => {
         loadStats().then(data => {
@@ -721,6 +761,109 @@ export default function HomeScreen({ onNavigate, theme, currentUser, partnerPres
                 )}
                 <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>haizur archives</span>
             </motion.div>
+
+            {/* Floating suggestion button — glowing mail icon */}
+            <motion.button
+                initial={skipMotion ? false : { opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={skipMotion ? { duration: 0 } : { type: "spring", damping: 18, delay: 0.8 }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => { setShowSuggestions(true); dismissHint(); }}
+                aria-label="Saran & pesan manis"
+                style={{
+                    position: "fixed",
+                    top: isMobile ? 18 : 26,
+                    right: isMobile ? 18 : 26,
+                    zIndex: 45,
+                    width: isMobile ? 48 : 54,
+                    height: isMobile ? 48 : 54,
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, var(--main-color), var(--honey-color, #d4a054))",
+                    border: "2px solid rgba(255,255,255,0.15)",
+                    color: "var(--bg-color)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: isMobile ? 20 : 22,
+                    boxShadow: "0 0 0 0 rgba(212, 160, 84, 0.55), 0 8px 28px rgba(0,0,0,0.35)",
+                    animation: skipMotion ? "none" : "suggestionPulse 2.6s ease-in-out infinite",
+                    WebkitTapHighlightColor: "transparent",
+                }}
+            >
+                ✉️
+                {unreadSuggestions > 0 && (
+                    <span style={{
+                        position: "absolute",
+                        top: -3, right: -3,
+                        minWidth: 20, height: 20,
+                        padding: "0 5px",
+                        borderRadius: 999,
+                        background: "var(--error-color, #ef4444)",
+                        color: "#fff",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        fontFamily: "var(--font-mono)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        border: "2px solid var(--bg-color)",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                    }}>
+                        {unreadSuggestions > 99 ? "99+" : unreadSuggestions}
+                    </span>
+                )}
+            </motion.button>
+
+            {/* First-visit hint tooltip */}
+            <AnimatePresence>
+                {showSuggestionHint && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.92 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.92 }}
+                        transition={{ type: "spring", damping: 22 }}
+                        onClick={dismissHint}
+                        style={{
+                            position: "fixed",
+                            top: isMobile ? 74 : 86,
+                            right: isMobile ? 14 : 22,
+                            zIndex: 46,
+                            maxWidth: 260,
+                            padding: "10px 14px",
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--main-color)",
+                            borderRadius: "var(--radius-card)",
+                            boxShadow: "0 8px 28px rgba(0,0,0,0.45)",
+                            fontFamily: "var(--font-handwritten)",
+                            fontSize: 12.5,
+                            lineHeight: 1.5,
+                            color: "var(--text-on-card)",
+                            cursor: "pointer",
+                        }}
+                    >
+                        <div style={{
+                            position: "absolute",
+                            top: -6, right: 18,
+                            width: 10, height: 10,
+                            background: "var(--bg-card)",
+                            borderLeft: "1px solid var(--main-color)",
+                            borderTop: "1px solid var(--main-color)",
+                            transform: "rotate(45deg)",
+                        }} />
+                        <div style={{ fontWeight: 700, color: "var(--main-color)", marginBottom: 2 }}>✉️ Kotak saran</div>
+                        Tulis saran atau pesan manis di sini — partnermu baca di tombol yang sama.
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showSuggestions && (
+                    <SuggestionModal
+                        currentRole={suggestionRole}
+                        onClose={() => setShowSuggestions(false)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }

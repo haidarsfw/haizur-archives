@@ -1762,22 +1762,25 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 {Object.entries(groupedMessages).map(([date, msgs]) => (
                     <div key={date}>
                         <div style={{
-                            position: 'sticky', top: 0, zIndex: 5,
-                            padding: '10px 0 6px',
+                            position: 'sticky', top: -2, zIndex: 5,
+                            padding: '2px 0 4px',
                             display: 'flex', justifyContent: 'center',
                             pointerEvents: 'none',
                         }}>
                             <div style={{
-                                padding: '3px 12px',
+                                padding: '1px 8px',
                                 borderRadius: 999,
                                 background: 'var(--bg-card)',
                                 border: '1px solid var(--border-color)',
-                                fontSize: 11, color: 'var(--text-dim)',
-                                fontFamily: 'var(--font-handwritten)',
+                                fontSize: 9.5, color: 'var(--text-dim)',
+                                fontFamily: 'var(--font-mono)',
                                 fontWeight: 500,
+                                letterSpacing: '0.03em',
+                                lineHeight: 1.3,
                                 backdropFilter: 'blur(6px)',
                                 WebkitBackdropFilter: 'blur(6px)',
-                                boxShadow: '0 2px 8px var(--shadow-color)',
+                                boxShadow: '0 1px 4px var(--shadow-color)',
+                                opacity: 0.85,
                             }}>
                                 {date}
                             </div>
