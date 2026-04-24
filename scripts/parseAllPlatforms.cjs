@@ -54,6 +54,12 @@ function ensureDir(dirPath) {
 function copyFile(src, dest) {
     try {
         ensureDir(path.dirname(dest));
+        // Skip copy if destination already exists with same size (idempotent reruns)
+        try {
+            const dStat = fs.statSync(dest);
+            const sStat = fs.statSync(src);
+            if (dStat.size === sStat.size) return true;
+        } catch (_) { /* dest missing — fall through to copy */ }
         fs.copyFileSync(src, dest);
         return true;
     } catch (e) {
@@ -68,8 +74,11 @@ try { sharp = require('sharp'); } catch (e) { /* sharp not installed — HEIC fi
 async function copyOrConvertMedia(srcPath, destPath) {
     const ext = path.extname(srcPath).toLowerCase();
     if ((ext === '.heic') && sharp) {
+        const jpgDest = destPath.replace(/\.heic$/i, '.jpg');
+        // Idempotent: skip HEIC conversion if jpg already exists
+        if (fs.existsSync(jpgDest)) return { copied: true, destPath: jpgDest };
         try {
-            const jpgDest = destPath.replace(/\.heic$/i, '.jpg');
+            ensureDir(path.dirname(jpgDest));
             await sharp(srcPath).jpeg({ quality: 85 }).toFile(jpgDest);
             return { copied: true, destPath: jpgDest };
         } catch (e) {

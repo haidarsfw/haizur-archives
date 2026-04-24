@@ -269,41 +269,22 @@ export default function SuggestionModal({ currentRole, onClose }) {
                             </button>
                         </div>
 
-                        {/* Special note — pinned love-letter style */}
+                        {/* Special note — soft box, no decoration */}
                         <div style={{
                             marginTop: 14,
                             padding: "14px 16px",
                             borderRadius: "var(--radius-card)",
                             background: "rgba(212, 160, 84, 0.08)",
                             border: "1px solid rgba(212, 160, 84, 0.35)",
-                            display: "flex",
-                            gap: 12,
-                            alignItems: "flex-start",
-                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.02)",
                         }}>
-                            <span style={{ fontSize: 20, lineHeight: 1.2, flexShrink: 0 }}>💌</span>
-                            <div>
-                                <div style={{
-                                    fontSize: 10,
-                                    letterSpacing: "0.08em",
-                                    color: "var(--main-color)",
-                                    fontFamily: "var(--font-mono)",
-                                    fontWeight: 700,
-                                    marginBottom: 6,
-                                }}>
-                                    CATATAN KECIL
-                                </div>
-                                <div style={{
-                                    fontSize: 18,
-                                    color: "var(--text-color)",
-                                    fontFamily: "'Dancing Script', 'Brush Script MT', cursive",
-                                    fontStyle: "italic",
-                                    fontWeight: 500,
-                                    lineHeight: 1.45,
-                                    letterSpacing: "0.005em",
-                                }}>
-                                    “{SPECIAL_NOTE}”
-                                </div>
+                            <div style={{
+                                fontSize: 15,
+                                color: "var(--text-color)",
+                                fontFamily: "var(--font-handwritten)",
+                                fontStyle: "italic",
+                                lineHeight: 1.5,
+                            }}>
+                                {SPECIAL_NOTE}
                             </div>
                         </div>
 

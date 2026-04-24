@@ -1,16 +1,17 @@
 {
-  "version": "1777027486132",
-  "builtAt": "2026-04-24T10:44:46.132Z",
+  "version": "1777031090193",
+  "builtAt": "2026-04-24T11:44:50.193Z",
   "highlights": [
-    "Tombol ✉️ glowing di landing — kotak saran, kita bisa tulis + baca saran partner",
-    "Sticker tanggal di chat dibuat lebih kecil + nempel tipis di atas, ga ganggu lagi",
-    "Tombol hapus satu aja — hapus untuk berdua, ada Undo 5 detik",
+    "Header chat di mobile dirapihin — tombol sekunder masuk menu ⋯",
+    "Fix scroll otomatis ke bawah di mobile, ga lompat-lompat lagi",
+    "Data WhatsApp First diperbarui (sampai April 2026, lebih banyak memori)",
+    "Kotak saran tulisannya pake font normal lagi, boxnya clean (ga ada emoji/label)",
+    "Tombol ✉️ di landing buat kirim + baca saran dua arah (kita & partner)",
+    "Sticker tanggal di chat dibuat kecil + nempel tipis di atas",
+    "Tombol hapus satu aja → hapus untuk berdua, ada Undo 5 detik",
     "Panel 🗄️ buat lihat + pulihkan pesan yang udah dihapus",
-    "Edit pesan text sendiri: menu reaction → ✏️, ada tag (edited)",
-    "Jadwalkan pesan ⏰ — pilih waktu, dikirim otomatis nanti",
-    "Link di pesan otomatis tampil kartu preview judul + gambar",
-    "Emoji picker baru: searchable, skin-tone (long-press), kategori, recents",
-    "Mobile: swipe bubble ke kanan = reply cepat, semua tombol pake getaran halus",
-    "Input multi-line textarea, voice note bisa di-seek + auto-play berurutan"
+    "Edit pesan text: ✏️ di menu reaction, ada tag (edited)",
+    "Jadwalkan pesan ⏰ — pilih waktu, dikirim otomatis",
+    "Link otomatis tampil kartu preview, emoji picker searchable + skin-tone"
   ]
 }

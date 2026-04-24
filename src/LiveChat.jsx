@@ -105,6 +105,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const [isNearBottomState, setIsNearBottomState] = useState(true);
     const [screenshotToast, setScreenshotToast] = useState(null);
     const [autoPlayVoice, setAutoPlayVoice] = useState(true);
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -357,6 +358,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
     // Auto-scroll — only if user is already near the bottom, and only when a
     // new message arrives (not on read-receipt / reaction updates).
+    // Uses container.scrollTop directly instead of scrollIntoView so the
+    // outer page/viewport is never disturbed (fixes mobile jump-up glitch
+    // where soft-keyboard resize + scrollIntoView fought each other).
     const lastScrollSyncCountRef = useRef(0);
     useEffect(() => {
         const container = messagesContainerRef.current;
@@ -366,13 +370,21 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         if (messages.length === prevCount) return;
         const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         const isNearBottom = distanceFromBottom < NEAR_BOTTOM_PX;
-        // Initial load (prevCount === 0): snap to bottom once so the chat
-        // opens on the newest messages. Thereafter, respect user scroll.
-        if (prevCount === 0 || isNearBottom) {
-            requestAnimationFrame(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: prevCount === 0 ? "auto" : "smooth" });
-            });
-        }
+        if (prevCount !== 0 && !isNearBottom) return;
+        const run = () => {
+            const c = messagesContainerRef.current;
+            if (!c) return;
+            const target = c.scrollHeight;
+            if (prevCount === 0) {
+                c.scrollTop = target; // instant snap on first load
+            } else if (typeof c.scrollTo === "function") {
+                c.scrollTo({ top: target, behavior: "smooth" });
+            } else {
+                c.scrollTop = target;
+            }
+        };
+        // Double-RAF: wait for layout + paint so height includes the new message
+        requestAnimationFrame(() => requestAnimationFrame(run));
     }, [messages]);
 
     // Track scroll position so jump-to-unread pill knows when to show
@@ -526,8 +538,17 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const scrollToMessage = useCallback((messageId) => {
         if (!messageId) return;
         const el = messageRefs.current.get(messageId);
-        if (!el) return;
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const container = messagesContainerRef.current;
+        if (!el || !container) return;
+        // Scroll only the chat container, not outer viewport (matters on mobile)
+        const containerRect = container.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const delta = elRect.top - containerRect.top - (containerRect.height / 2 - elRect.height / 2);
+        if (typeof container.scrollTo === "function") {
+            container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+        } else {
+            container.scrollTop = container.scrollTop + delta;
+        }
         setPulseId(messageId);
         setTimeout(() => setPulseId((curr) => (curr === messageId ? null : curr)), 1200);
     }, []);
@@ -1524,10 +1545,10 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         onClick={sendNudge}
                         className="rounded-full transition-colors"
                         style={{
-                            padding: nudgeJustSent ? "4px 10px" : "8px",
+                            padding: nudgeJustSent ? "4px 10px" : isMobile ? "6px" : "8px",
                             background: nudgeJustSent ? "rgba(255, 200, 120, 0.22)" : "rgba(255, 200, 120, 0.12)",
                             cursor: "pointer",
-                            fontSize: nudgeJustSent ? 13 : 16,
+                            fontSize: nudgeJustSent ? 13 : isMobile ? 14 : 16,
                             fontFamily: nudgeJustSent ? "var(--font-mono)" : "inherit",
                             color: nudgeJustSent ? "var(--main-color)" : "inherit",
                             display: "inline-flex", alignItems: "center", gap: 4,
@@ -1539,69 +1560,112 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     >
                         {nudgeJustSent ? <><span>👉</span><span>nudged</span></> : "✨"}
                     </motion.button>
-                    {/* Call button */}
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setIsCallOpen(true)}
-                        className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors text-green-500"
-                        title="Voice Call"
-                        aria-label="Voice call"
-                    >
-                        📞
-                    </motion.button>
-                    {/* Starred messages button */}
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => { setShowStarred(!showStarred); setShowArchive(false); haptic.tap(); }}
-                        className={`p-2 rounded-full transition-colors ${showStarred ? 'bg-yellow-400 text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
-                        title="Starred Messages"
-                    >
-                        ⭐
-                    </motion.button>
-                    {/* Archive (deleted) button */}
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => { setShowArchive(!showArchive); setShowStarred(false); haptic.tap(); }}
-                        className={`p-2 rounded-full transition-colors ${showArchive ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
-                        title="Pesan terhapus"
-                    >
-                        🗄️
-                    </motion.button>
-                    {/* Search button */}
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setShowSearch(!showSearch)}
-                        className={`p-2 rounded-full transition-colors ${showSearch ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
-                        title="Search"
-                    >
-                        🔍
-                    </motion.button>
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => { setShowThemePicker(!showThemePicker); setShowEmojiPicker(false); setShowStickerPicker(false); }}
-                        className={`p-2 rounded-full transition-colors ${showThemePicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`}
-                    >
-                        🎨
-                    </motion.button>
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setSoundEnabled(!soundEnabled)}
-                        className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors"
-                    >
-                        {soundEnabled ? "🔔" : "🔕"}
-                    </motion.button>
-                    <button
-                        onClick={() => { localStorage.removeItem("haizur-chat-role"); setRole(null); }}
-                        className="text-[13px] text-[var(--text-dim-card)] hover:text-[var(--text-on-card)] px-2 py-1 rounded-lg hover:bg-[rgba(255,255,255,0.08)] transition-colors ml-1"
-                    >
-                        Switch
-                    </button>
+
+                    {/* On desktop: all buttons inline. On mobile: only star + archive + overflow ⋯ */}
+                    {!isMobile && (
+                        <>
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setIsCallOpen(true)} className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors text-green-500" title="Voice Call" aria-label="Voice call">📞</motion.button>
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => { setShowStarred(!showStarred); setShowArchive(false); haptic.tap(); }} className={`p-2 rounded-full transition-colors ${showStarred ? 'bg-yellow-400 text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`} title="Starred">⭐</motion.button>
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => { setShowArchive(!showArchive); setShowStarred(false); haptic.tap(); }} className={`p-2 rounded-full transition-colors ${showArchive ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`} title="Pesan terhapus">🗄️</motion.button>
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setShowSearch(!showSearch)} className={`p-2 rounded-full transition-colors ${showSearch ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`} title="Search">🔍</motion.button>
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => { setShowThemePicker(!showThemePicker); setShowEmojiPicker(false); setShowStickerPicker(false); }} className={`p-2 rounded-full transition-colors ${showThemePicker ? 'bg-[var(--main-color)] text-white' : 'hover:bg-[rgba(255,255,255,0.08)]'}`} title="Theme">🎨</motion.button>
+                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setSoundEnabled(!soundEnabled)} className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors" title="Sound">{soundEnabled ? "🔔" : "🔕"}</motion.button>
+                            <button
+                                onClick={() => { localStorage.removeItem("haizur-chat-role"); setRole(null); }}
+                                className="text-[13px] text-[var(--text-dim-card)] hover:text-[var(--text-on-card)] px-2 py-1 rounded-lg hover:bg-[rgba(255,255,255,0.08)] transition-colors ml-1"
+                            >
+                                Switch
+                            </button>
+                        </>
+                    )}
+                    {isMobile && (
+                        <div style={{ position: "relative" }}>
+                            <motion.button
+                                whileHover={{ scale: 1.08 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => setShowMobileMenu((v) => !v)}
+                                className="rounded-full hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+                                style={{
+                                    padding: "6px 10px",
+                                    fontSize: 18,
+                                    fontWeight: 700,
+                                    color: "var(--text-on-card)",
+                                    letterSpacing: "0.12em",
+                                    lineHeight: 1,
+                                    background: showMobileMenu ? "var(--bg-secondary)" : "transparent",
+                                }}
+                                aria-label="More actions"
+                            >
+                                ⋯
+                            </motion.button>
+                            <AnimatePresence>
+                                {showMobileMenu && (
+                                    <>
+                                        <div
+                                            onClick={() => setShowMobileMenu(false)}
+                                            style={{ position: "fixed", inset: 0, zIndex: 38 }}
+                                        />
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                                            transition={{ duration: 0.15 }}
+                                            style={{
+                                                position: "absolute",
+                                                right: 0,
+                                                top: "calc(100% + 6px)",
+                                                zIndex: 39,
+                                                minWidth: 190,
+                                                background: "var(--bg-card)",
+                                                border: "1px solid var(--border-color)",
+                                                borderRadius: "var(--radius-card)",
+                                                boxShadow: "0 10px 30px var(--shadow-color)",
+                                                padding: 6,
+                                                display: "flex",
+                                                flexDirection: "column",
+                                                gap: 2,
+                                            }}
+                                        >
+                                            {[
+                                                { icon: "📞", label: "Voice call", onClick: () => setIsCallOpen(true) },
+                                                { icon: "⭐", label: showStarred ? "Tutup starred" : "Starred", onClick: () => { setShowStarred(!showStarred); setShowArchive(false); } },
+                                                { icon: "🗄️", label: showArchive ? "Tutup arsip" : "Pesan terhapus", onClick: () => { setShowArchive(!showArchive); setShowStarred(false); } },
+                                                { icon: "🔍", label: showSearch ? "Tutup cari" : "Cari pesan", onClick: () => setShowSearch(!showSearch) },
+                                                { icon: "🎨", label: showThemePicker ? "Tutup tema" : "Tema chat", onClick: () => { setShowThemePicker(!showThemePicker); setShowEmojiPicker(false); setShowStickerPicker(false); } },
+                                                { icon: soundEnabled ? "🔔" : "🔕", label: soundEnabled ? "Matikan suara" : "Nyalakan suara", onClick: () => setSoundEnabled(!soundEnabled) },
+                                                { icon: "👤", label: "Ganti role", onClick: () => { localStorage.removeItem("haizur-chat-role"); setRole(null); } },
+                                            ].map((item) => (
+                                                <button
+                                                    key={item.label}
+                                                    onClick={() => { item.onClick(); setShowMobileMenu(false); haptic.tap(); }}
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 10,
+                                                        padding: "9px 12px",
+                                                        borderRadius: 8,
+                                                        background: "transparent",
+                                                        border: "none",
+                                                        color: "var(--text-on-card)",
+                                                        fontSize: 13,
+                                                        fontFamily: "var(--font-body)",
+                                                        cursor: "pointer",
+                                                        textAlign: "left",
+                                                        width: "100%",
+                                                    }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                                >
+                                                    <span style={{ fontSize: 16 }}>{item.icon}</span>
+                                                    <span>{item.label}</span>
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -2295,7 +2359,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         transition={{ type: "spring", stiffness: 380, damping: 24 }}
                         onClick={() => {
                             haptic.tap();
-                            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                            const c = messagesContainerRef.current;
+                            if (c && typeof c.scrollTo === "function") c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
+                            else if (c) c.scrollTop = c.scrollHeight;
                         }}
                         style={{
                             position: "absolute",
