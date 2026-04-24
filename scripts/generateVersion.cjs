@@ -14,13 +14,13 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Pojok kanan atas sekarang nama partner + status online/last seen-nya",
-    "Tombol ✨ di chat = nudge, colek partner satu tap",
-    "Scroll chat udah ga kepaksa balik kebawah",
-    "Ketik 'miss you', 'haha', 'good night', 'halo' → dapet efek lucu",
-    "Badge merah di bubble chat = ada pesan belum dibaca",
-    "Bunyi-bunyian halus di seluruh web (bisa dimute di menu)",
-    "Web auto-refresh tiap kali ada update baru",
+    "Tap foto di chat → buka fullscreen, bisa pinch-zoom + geser + download",
+    "Panah kiri/kanan atau swipe buat loncat antar foto di chat",
+    "Paste screenshot (Ctrl/Cmd+V) langsung ke chat, atau drag file foto ke area chat",
+    "Foto sekarang bisa pake caption, tinggal ketik dulu sebelum kirim",
+    "Hover ✓✓ biru buat lihat jam pasti dia baca pesanmu",
+    "Format pesan: *tebal* _miring_ ~coret~ `kode` + link otomatis clickable",
+    "Tombol 📋 di menu reaction buat copy teks pesan",
 ];
 
 const payload = {

@@ -1,13 +1,13 @@
 {
-  "version": "1776857759261",
-  "builtAt": "2026-04-22T11:35:59.261Z",
+  "version": "1777006672320",
+  "builtAt": "2026-04-24T04:57:52.320Z",
   "highlights": [
-    "Pojok kanan atas sekarang nama partner + status online/last seen-nya",
-    "Tombol ✨ di chat = nudge, colek partner satu tap",
-    "Scroll chat udah ga kepaksa balik kebawah",
-    "Ketik 'miss you', 'haha', 'good night', 'halo' → dapet efek lucu",
-    "Badge merah di bubble chat = ada pesan belum dibaca",
-    "Bunyi-bunyian halus di seluruh web (bisa dimute di menu)",
-    "Web auto-refresh tiap kali ada update baru"
+    "Tap foto di chat → buka fullscreen, bisa pinch-zoom + geser + download",
+    "Panah kiri/kanan atau swipe buat loncat antar foto di chat",
+    "Paste screenshot (Ctrl/Cmd+V) langsung ke chat, atau drag file foto ke area chat",
+    "Foto sekarang bisa pake caption, tinggal ketik dulu sebelum kirim",
+    "Hover ✓✓ biru buat lihat jam pasti dia baca pesanmu",
+    "Format pesan: *tebal* _miring_ ~coret~ `kode` + link otomatis clickable",
+    "Tombol 📋 di menu reaction buat copy teks pesan"
   ]
 }

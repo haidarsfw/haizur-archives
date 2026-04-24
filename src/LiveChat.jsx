@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { firestore } from "./firebase";
 import {
@@ -21,6 +21,8 @@ import AudioCall from "./AudioCall";
 import { useSounds } from "./hooks/useSounds";
 import { formatLastSeen } from "./hooks/usePresence";
 import MessageEffect, { shouldTriggerEffect } from "./MessageEffects";
+import ChatImageLightbox from "./ChatImageLightbox";
+import { formatMessageText } from "./chatTextFormat";
 
 // Chat theme presets
 const CHAT_THEMES = {
@@ -77,6 +79,10 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const [nudgeBanner, setNudgeBanner] = useState(null);
     const [pulseId, setPulseId] = useState(null);
     const [nudgeJustSent, setNudgeJustSent] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState(null);
+    const [copyToast, setCopyToast] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [seenPopoverId, setSeenPopoverId] = useState(null);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -101,6 +107,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const lastNudgeSentRef = useRef(0);
     const nudgeInitialisedRef = useRef(false);
     const nudgeJustSentTimerRef = useRef(null);
+    const dragDepthRef = useRef(0);
+    const copyToastTimerRef = useRef(null);
+    const seenPopoverTimerRef = useRef(null);
 
     // Keep refs in sync so subscriptions can read latest values without
     // being re-deps (otherwise Firestore listeners churn on every render).
@@ -125,6 +134,34 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         document.addEventListener("visibilitychange", handleVisibility);
         return () => document.removeEventListener("visibilitychange", handleVisibility);
     }, []);
+
+    // Cleanup transient-toast timers on unmount
+    useEffect(() => () => {
+        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+        if (seenPopoverTimerRef.current) clearTimeout(seenPopoverTimerRef.current);
+    }, []);
+
+    // Paste-to-send image (Ctrl/Cmd+V with image in clipboard)
+    useEffect(() => {
+        const handlePaste = (e) => {
+            if (!isTabFocusedRef.current) return;
+            if (imagePreview || isRecording) return;
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (const item of items) {
+                if (item.type?.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (!file) continue;
+                    e.preventDefault();
+                    ingestImageFile(file);
+                    return;
+                }
+            }
+        };
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [imagePreview, isRecording]);
 
     // Load saved settings
     useEffect(() => {
@@ -408,7 +445,8 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         for (const msg of unreadMessages.slice(-10)) { // Mark last 10 unread
             try {
                 await updateDoc(doc(firestore, "chat-messages", msg.id), {
-                    readBy: arrayUnion(role)
+                    readBy: arrayUnion(role),
+                    [`readByTimes.${role}`]: serverTimestamp(),
                 });
             } catch (e) {
                 console.log("Read receipt update failed:", e);
@@ -747,6 +785,18 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         e.target.value = '';
     };
 
+    // Shared helper used by paste + drop — accepts a File, yields a compressed base64 preview
+    const ingestImageFile = async (file) => {
+        if (!file || !file.type?.startsWith('image/')) return;
+        try {
+            const compressed = await compressImage(file, 600, 0.8);
+            setImagePreview(compressed);
+            inputRef.current?.focus();
+        } catch {
+            setError("Failed to process image");
+        }
+    };
+
     // Handle custom sticker upload
     const handleStickerUpload = async (e) => {
         const file = e.target.files?.[0];
@@ -769,20 +819,25 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         saveCustomStickers(newStickers);
     };
 
-    // Send image message
+    // Send image message (optionally with caption pulled from the main input)
     const sendImage = async () => {
         if (!imagePreview || !role) return;
         setSendingImage(true);
-
+        const caption = newMessage.trim();
         try {
             await addDoc(collection(firestore, "chat-messages"), {
                 image: imagePreview,
+                text: caption || null,
                 sender: role,
                 timestamp: serverTimestamp(),
                 reactions: [],
+                readBy: [role],
+                readByTimes: { [role]: serverTimestamp() },
                 starred: false
             });
             setImagePreview(null);
+            setNewMessage("");
+            playSendSound();
         } catch (err) {
             console.error("Send image error:", err);
             setError("Failed to send image");
@@ -814,10 +869,78 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         return d.toLocaleDateString([], { month: "short", day: "numeric" });
     };
 
+    // Tooltip text for ✓✓ — shows when partner saw our message
+    const buildSeenAtTooltip = (msg) => {
+        if (!msg || msg.sender !== role) return undefined;
+        if (!(msg.readBy?.length > 1)) return "Delivered";
+        const other = role === "haidar" ? "princess" : "haidar";
+        const ts = msg.readByTimes?.[other];
+        if (!ts) return "Seen";
+        try {
+            const d = ts.toDate ? ts.toDate() : new Date(ts);
+            return `Seen ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+        } catch {
+            return "Seen";
+        }
+    };
+
+    // Copy message text to clipboard with iOS 12 fallback
+    const copyMessageText = async (text) => {
+        if (!text) return;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.setAttribute("readonly", "");
+                ta.style.position = "fixed";
+                ta.style.top = "-9999px";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand("copy"); } finally { document.body.removeChild(ta); }
+            }
+            playCue("menuOpen");
+            setCopyToast("Copied");
+            if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+            copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1400);
+        } catch {
+            setError("Copy failed");
+        }
+    };
+
+    const showSeenPopover = (msgId) => {
+        setSeenPopoverId(msgId);
+        if (seenPopoverTimerRef.current) clearTimeout(seenPopoverTimerRef.current);
+        seenPopoverTimerRef.current = setTimeout(() => setSeenPopoverId(null), 1800);
+    };
+
     // Filter deleted messages and group
     const visibleMessages = filteredMessages.filter(m =>
         !m.deletedFor?.includes(role)
     );
+
+    // Derive ordered image list for the lightbox (chronological, same order as render)
+    const imageMessages = useMemo(() => (
+        visibleMessages
+            .filter(m => !!m.image && !m.deletedForEveryone)
+            .map(m => ({
+                id: m.id,
+                src: m.image,
+                sender: m.sender,
+                timestamp: m.timestamp,
+                caption: m.text || null,
+            }))
+    ), [visibleMessages]);
+
+    const openLightboxFor = (msgId) => {
+        const i = imageMessages.findIndex(img => img.id === msgId);
+        if (i >= 0) {
+            setActiveReactionMessage(null);
+            setLightboxIndex(i);
+        }
+    };
 
     const groupedMessages = visibleMessages.reduce((acc, msg) => {
         const key = msg.timestamp ? formatDate(msg.timestamp) : "Now";
@@ -912,11 +1035,77 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     }
 
     // Chat interface
+    const onChatDragEnter = (e) => {
+        if (!e.dataTransfer?.types) return;
+        const hasFiles = Array.from(e.dataTransfer.types).includes('Files');
+        if (!hasFiles) return;
+        dragDepthRef.current += 1;
+        if (!isDragging) setIsDragging(true);
+    };
+    const onChatDragLeave = () => {
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) setIsDragging(false);
+    };
+    const onChatDragOver = (e) => {
+        if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    };
+    const onChatDrop = async (e) => {
+        if (!e.dataTransfer?.files?.length) return;
+        e.preventDefault();
+        dragDepthRef.current = 0;
+        setIsDragging(false);
+        const file = Array.from(e.dataTransfer.files).find(f => f.type?.startsWith('image/'));
+        if (!file) return;
+        if (imagePreview) return;
+        await ingestImageFile(file);
+    };
+
     return (
         <div
             className={`flex flex-col ${isPopup ? 'h-[65vh] md:h-[70vh]' : 'w-full max-w-2xl h-[75vh] rounded-2xl mx-4'} overflow-hidden`}
-            style={{ background: currentTheme.bg }}
+            style={{ background: currentTheme.bg, position: 'relative' }}
+            onDragEnter={onChatDragEnter}
+            onDragLeave={onChatDragLeave}
+            onDragOver={onChatDragOver}
+            onDrop={onChatDrop}
         >
+            {/* Drag-and-drop overlay */}
+            <AnimatePresence>
+                {isDragging && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        style={{
+                            position: 'absolute', inset: 0, zIndex: 60,
+                            background: 'rgba(0,0,0,0.55)',
+                            backdropFilter: 'blur(6px)',
+                            WebkitBackdropFilter: 'blur(6px)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        <div style={{
+                            padding: '20px 28px',
+                            borderRadius: 'var(--radius-card)',
+                            background: 'var(--bg-card)',
+                            border: '2px dashed var(--main-color)',
+                            color: 'var(--main-color)',
+                            fontFamily: 'var(--font-handwritten)',
+                            fontSize: 18,
+                            textAlign: 'center',
+                            boxShadow: '0 8px 30px var(--shadow-color)',
+                        }}>
+                            📷 Drop to send image
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Header */}
             <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1254,7 +1443,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                     setActiveReactionMessage(activeReactionMessage === msg.id ? null : msg.id);
                                                 }
                                             }}
-                                            className={`cursor-pointer ${isSticker ? 'p-2' : isImage ? 'p-1' : 'px-3.5 py-2'}`}
+                                            className={`cursor-pointer ${isSticker ? 'p-2' : isImage ? 'p-2' : 'px-3.5 py-2'}`}
                                             style={{
                                                 borderRadius: 'var(--radius-card)',
                                                 backgroundColor: isSticker || isImage ? 'transparent' : bubbleColor,
@@ -1278,7 +1467,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                     aria-label="Jump to replied message"
                                                 >
                                                     <span className="font-medium">{msg.replyTo.sender === "haidar" ? "Haidar" : "Princess"}: </span>
-                                                    {msg.replyTo.text}
+                                                    {formatMessageText(msg.replyTo.text)}
                                                 </button>
                                             )}
 
@@ -1303,13 +1492,27 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                     </motion.span>
                                                 )
                                             ) : isImage ? (
-                                                <motion.img
-                                                    src={msg.image}
-                                                    alt="Shared image"
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    className="max-w-[250px] max-h-[200px] rounded-xl object-cover"
-                                                />
+                                                <>
+                                                    <motion.img
+                                                        src={msg.image}
+                                                        alt={msg.text || "Shared image"}
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        whileTap={{ scale: 0.97 }}
+                                                        onClick={(e) => { e.stopPropagation(); openLightboxFor(msg.id); }}
+                                                        className="max-w-[250px] max-h-[200px] rounded-xl object-cover cursor-zoom-in block"
+                                                        loading="lazy"
+                                                        draggable={false}
+                                                    />
+                                                    {msg.text && (
+                                                        <p
+                                                            className="text-[14px] leading-relaxed break-words mt-1.5 px-0.5"
+                                                            style={{ color: 'rgba(255,255,255,0.92)' }}
+                                                        >
+                                                            {formatMessageText(msg.text)}
+                                                        </p>
+                                                    )}
+                                                </>
                                             ) : isVoice ? (
                                                 <div className="flex items-center gap-2 min-w-[150px]">
                                                     <motion.div
@@ -1336,27 +1539,71 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p className="text-[15px] leading-relaxed break-words">{msg.text}</p>
+                                                <p className="text-[15px] leading-relaxed break-words">{formatMessageText(msg.text)}</p>
                                             )}
                                             {!isSticker && !isVoice && !isImage && (
                                                 <p className="text-[11px] opacity-60 text-right mt-0.5 flex items-center justify-end gap-1">
                                                     {formatTime(msg.timestamp)}
                                                     {isMe && (
-                                                        <span className={msg.readBy?.length > 1 ? "text-blue-400" : "opacity-50"}>
+                                                        <span
+                                                            className={msg.readBy?.length > 1 ? "text-blue-400 cursor-help" : "opacity-50 cursor-help"}
+                                                            title={buildSeenAtTooltip(msg)}
+                                                            onClick={(e) => { e.stopPropagation(); showSeenPopover(msg.id); }}
+                                                        >
                                                             {msg.readBy?.length > 1 ? "✓✓" : "✓"}
                                                         </span>
                                                     )}
                                                 </p>
                                             )}
-                                            {/* Read receipt for stickers/images/voice */}
-                                            {(isSticker || isVoice || isImage) && isMe && (
-                                                <div className="text-right mt-1">
-                                                    <span className={`text-[11px] ${msg.readBy?.length > 1 ? "text-blue-400" : "text-gray-400"}`}>
-                                                        {msg.readBy?.length > 1 ? "✓✓" : "✓"}
-                                                    </span>
+                                            {/* Receipt + time for stickers/images/voice — rendered both directions for reactable padding */}
+                                            {(isSticker || isVoice || isImage) && (
+                                                <div
+                                                    className="mt-1 flex items-center justify-end gap-1 px-0.5"
+                                                    style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)' }}
+                                                >
+                                                    <span>{formatTime(msg.timestamp)}</span>
+                                                    {isMe && (
+                                                        <span
+                                                            className={msg.readBy?.length > 1 ? "text-blue-400 cursor-help" : "text-gray-300 cursor-help"}
+                                                            title={buildSeenAtTooltip(msg)}
+                                                            onClick={(e) => { e.stopPropagation(); showSeenPopover(msg.id); }}
+                                                        >
+                                                            {msg.readBy?.length > 1 ? "✓✓" : "✓"}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             )}
                                         </motion.div>
+
+                                        {/* Seen-at popover (tap on ✓✓) */}
+                                        <AnimatePresence>
+                                            {seenPopoverId === msg.id && isMe && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                                                    transition={{ duration: 0.15 }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        [isMe ? 'right' : 'left']: 4,
+                                                        bottom: -22,
+                                                        padding: '2px 10px',
+                                                        borderRadius: 999,
+                                                        background: 'var(--bg-card)',
+                                                        border: '1px solid var(--border-color)',
+                                                        color: 'var(--main-color)',
+                                                        fontSize: 10,
+                                                        fontFamily: 'var(--font-mono)',
+                                                        whiteSpace: 'nowrap',
+                                                        zIndex: 25,
+                                                        boxShadow: '0 2px 6px var(--shadow-color)',
+                                                    }}
+                                                >
+                                                    {buildSeenAtTooltip(msg) || "Delivered"}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
 
                                         {/* Reactions */}
                                         {reactions.length > 0 && (
@@ -1427,6 +1674,17 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                         >
                                                             ⭐
                                                         </motion.button>
+                                                        {msg.text && (
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.2 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={(e) => { e.stopPropagation(); copyMessageText(msg.text); setActiveReactionMessage(null); }}
+                                                                className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
+                                                                title="Copy text"
+                                                            >
+                                                                📋
+                                                            </motion.button>
+                                                        )}
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
@@ -1647,29 +1905,79 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                         </motion.button>
                     </div>
                 ) : imagePreview ? (
-                    /* Image preview */
-                    <div className="flex items-center gap-3">
-                        <img src={imagePreview} alt="Preview" className="w-16 h-16 rounded-xl object-cover" />
-                        <div className="flex-1 text-sm text-[var(--sub-color)]">Ready to send</div>
-                        <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={cancelImagePreview}
-                            className="p-2 rounded-full bg-gray-200 text-gray-600"
+                    /* Image preview with optional caption */
+                    <div className="flex flex-col gap-2">
+                        <div
+                            className="flex items-center gap-3 p-2 rounded-xl"
+                            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
                         >
-                            ✕
-                        </motion.button>
-                        <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={sendImage}
-                            disabled={sendingImage}
-                            className="p-2.5 rounded-full bg-green-500 text-white"
-                        >
-                            {sendingImage ? "..." : "➤"}
-                        </motion.button>
+                            <img src={imagePreview} alt="Preview" className="w-14 h-14 rounded-lg object-cover" />
+                            <div
+                                className="flex-1 text-xs italic"
+                                style={{ color: 'var(--sub-color)' }}
+                            >
+                                Add a caption or send as-is
+                            </div>
+                            <motion.button
+                                type="button"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={cancelImagePreview}
+                                className="p-1.5 rounded-full text-sm"
+                                style={{ background: 'var(--bg-card)', color: 'var(--text-dim)', border: '1px solid var(--border-color)' }}
+                                aria-label="Cancel image"
+                            >
+                                ✕
+                            </motion.button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={newMessage}
+                                onChange={handleInputChange}
+                                onBlur={handleInputBlur}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey && !sendingImage) {
+                                        e.preventDefault();
+                                        sendImage();
+                                    }
+                                }}
+                                placeholder="Caption (optional)…"
+                                autoComplete="off"
+                                className="flex-1"
+                                style={{
+                                    padding: '12px 16px', borderRadius: 'var(--radius-card)',
+                                    background: 'var(--bg-secondary)', color: 'var(--text-color)',
+                                    border: '1px solid var(--border-color)',
+                                    outline: 'none', fontSize: 15,
+                                    fontFamily: 'var(--font-body)',
+                                }}
+                            />
+                            <motion.button
+                                type="button"
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={sendImage}
+                                disabled={sendingImage}
+                                style={{
+                                    padding: 10, borderRadius: 'var(--radius-card)',
+                                    background: 'var(--main-color)', color: 'var(--bg-color)',
+                                    border: 'none', cursor: sendingImage ? 'wait' : 'pointer',
+                                    fontWeight: 600, transition: 'all 0.2s',
+                                    opacity: sendingImage ? 0.7 : 1,
+                                }}
+                                aria-label="Send image"
+                            >
+                                {sendingImage ? (
+                                    <span style={{ display: 'inline-block', width: 20, textAlign: 'center' }}>…</span>
+                                ) : (
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                                    </svg>
+                                )}
+                            </motion.button>
+                        </div>
                     </div>
                 ) : (
                     <div className="flex items-center gap-2">
@@ -1862,6 +2170,41 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     onDone={() => removeEffect(e.id)}
                 />
             ))}
+
+            {/* Copy-to-clipboard toast */}
+            <AnimatePresence>
+                {copyToast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        transition={{ duration: 0.18 }}
+                        style={{
+                            position: "absolute", bottom: 82, left: "50%",
+                            transform: "translateX(-50%)", zIndex: 45,
+                            padding: "8px 18px", borderRadius: 999,
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--border-color)",
+                            color: "var(--main-color)",
+                            fontFamily: "var(--font-handwritten)",
+                            fontSize: 13, whiteSpace: "nowrap",
+                            boxShadow: "0 4px 20px var(--shadow-color)",
+                            pointerEvents: "none",
+                        }}
+                    >
+                        {copyToast}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Fullscreen image lightbox */}
+            {lightboxIndex !== null && imageMessages.length > 0 && (
+                <ChatImageLightbox
+                    images={imageMessages}
+                    startIndex={lightboxIndex}
+                    onClose={() => setLightboxIndex(null)}
+                />
+            )}
         </div>
     );
 };
