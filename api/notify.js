@@ -94,6 +94,32 @@ export default async function handler(req, res) {
     if (!recipientRole || !senderRole) return res.status(400).json({ error: "recipientRole + senderRole required" });
     if (recipientRole === senderRole) return res.status(200).json({ skipped: "same role" });
 
+    // Diagnostic: allow caller to peek env shape without exposing secrets
+    if (body?.__diag === true) {
+        const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "";
+        let pkLen = 0, pkNewlines = 0, pkLiteralBS = 0, parseOk = false, projectId = null;
+        try {
+            const parsed = JSON.parse(raw);
+            parseOk = true;
+            projectId = parsed.project_id || null;
+            pkLen = (parsed.private_key || "").length;
+            pkNewlines = ((parsed.private_key || "").match(/\n/g) || []).length;
+            pkLiteralBS = ((parsed.private_key || "").match(/\\n/g) || []).length;
+        } catch { /* noop */ }
+        return res.status(200).json({
+            diag: true,
+            buildTag: "notify-v2",
+            envRawLen: raw.length,
+            parseOk,
+            projectId,
+            pkLen,
+            pkNewlines,
+            pkLiteralBS,
+            hasDbUrl: !!process.env.FIREBASE_DATABASE_URL,
+            hasResendKey: !!process.env.RESEND_API_KEY,
+        });
+    }
+
     let app;
     try {
         app = initAdmin();
