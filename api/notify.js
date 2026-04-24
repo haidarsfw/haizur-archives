@@ -28,9 +28,27 @@ function initAdmin() {
     } catch (e) {
         throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON: " + e.message);
     }
-    // Replace escaped newlines in private key (common when copy/pasted into env vars)
-    if (credentials.private_key && credentials.private_key.includes("\\n")) {
-        credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
+    // Normalize private_key newlines. Vercel's env UI does NOT interpret
+    // `\n` escapes on a single-line paste — the key comes through with
+    // literal "\n" sequences. Also tolerate Windows-style `\r\n`.
+    if (credentials.private_key) {
+        let pk = credentials.private_key;
+        if (pk.includes("\\n")) pk = pk.replace(/\\n/g, "\n");
+        pk = pk.replace(/\r\n/g, "\n");
+        // If the header/footer are still on the same line as the body, repair
+        if (!pk.includes("\n") && pk.includes("-----BEGIN PRIVATE KEY-----")) {
+            pk = pk
+                .replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+                .replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----");
+            // Break body into 64-char lines
+            const [header, rest] = pk.split("-----BEGIN PRIVATE KEY-----\n");
+            const [body, footer] = (rest || "").split("\n-----END PRIVATE KEY-----");
+            if (body) {
+                const wrapped = body.replace(/(.{64})/g, "$1\n");
+                pk = `${header}-----BEGIN PRIVATE KEY-----\n${wrapped}\n-----END PRIVATE KEY-----${footer || ""}`;
+            }
+        }
+        credentials.private_key = pk;
     }
     return admin.initializeApp({
         credential: admin.credential.cert(credentials),
