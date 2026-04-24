@@ -14,17 +14,11 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Header chat di mobile dirapihin — tombol sekunder masuk menu ⋯",
-    "Fix scroll otomatis ke bawah di mobile, ga lompat-lompat lagi",
-    "Data WhatsApp First diperbarui (sampai April 2026, lebih banyak memori)",
-    "Kotak saran tulisannya pake font normal lagi, boxnya clean (ga ada emoji/label)",
-    "Tombol ✉️ di landing buat kirim + baca saran dua arah (kita & partner)",
-    "Sticker tanggal di chat dibuat kecil + nempel tipis di atas",
-    "Tombol hapus satu aja → hapus untuk berdua, ada Undo 5 detik",
-    "Panel 🗄️ buat lihat + pulihkan pesan yang udah dihapus",
-    "Edit pesan text: ✏️ di menu reaction, ada tag (edited)",
-    "Jadwalkan pesan ⏰ — pilih waktu, dikirim otomatis",
-    "Link otomatis tampil kartu preview, emoji picker searchable + skin-tone",
+    "Fix: chat bener-bener ga random jump ke atas lagi (overflowAnchor + scroll-restore off)",
+    "Fix: draft tetap masih kelihatan setelah kirim — sekarang bener-bener bersih",
+    "Fix: tombol ? pas ngetik di chat ga buka popup help lagi",
+    "Live presence lebih akurat: heartbeat 10 detik + online dot auto-decay tiap 10s",
+    "Auto-refresh nunggu kamu idle dulu biar ga ganggu pas chat",
 ];
 
 const payload = {

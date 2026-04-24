@@ -1,12 +1,15 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { db } from '../firebase';
-import { ref, set, onValue, onDisconnect, serverTimestamp } from 'firebase/database';
+import { ref, set, onValue, onDisconnect, update } from 'firebase/database';
 
-const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const HEARTBEAT_INTERVAL = 10000; // 10 seconds — trade write volume for snappier online dot
+const ACTIVITY_THROTTLE_MS = 5000;
 
 export function usePresence(role) {
     const [partnerPresence, setPartnerPresence] = useState(null);
     const heartbeatRef = useRef(null);
+    const roleRef = useRef(role);
+    useEffect(() => { roleRef.current = role; }, [role]);
 
     useEffect(() => {
         if (!role) return;
@@ -17,12 +20,13 @@ export function usePresence(role) {
 
         // Set online
         const goOnline = () => {
-            // First read existing data to preserve lastLogin if recently logged in, 
+            // First read existing data to preserve lastLogin if recently logged in,
             // or we just set it now.
             set(myPresenceRef, {
                 online: true,
                 lastSeen: Date.now(),
                 lastLogin: Date.now(), // Update login time
+                chatActive: false,
                 role,
             });
         };
@@ -33,17 +37,36 @@ export function usePresence(role) {
         onDisconnect(myPresenceRef).set({
             online: false,
             lastSeen: Date.now(),
+            chatActive: false,
             role,
         });
 
         // Heartbeat
         heartbeatRef.current = setInterval(() => {
-            set(myPresenceRef, {
+            update(myPresenceRef, {
                 online: true,
                 lastSeen: Date.now(),
                 role,
             });
         }, HEARTBEAT_INTERVAL);
+
+        // Bump lastSeen on real user activity (throttled) — guarantees the
+        // online dot stays green even if the heartbeat interval is paused
+        // by browser throttling in inactive tabs.
+        let lastActivityWrite = 0;
+        const onActivity = () => {
+            const now = Date.now();
+            if (now - lastActivityWrite < ACTIVITY_THROTTLE_MS) return;
+            lastActivityWrite = now;
+            update(myPresenceRef, { online: true, lastSeen: now, role });
+        };
+        const events = ["keydown", "pointerdown", "touchstart", "scroll"];
+        events.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+
+        const onVisibility = () => {
+            if (!document.hidden) onActivity();
+        };
+        document.addEventListener("visibilitychange", onVisibility);
 
         // Listen for partner
         const unsubscribe = onValue(partnerPresenceRef, (snapshot) => {
@@ -56,9 +79,12 @@ export function usePresence(role) {
         // Cleanup
         return () => {
             if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+            events.forEach((ev) => window.removeEventListener(ev, onActivity));
+            document.removeEventListener("visibilitychange", onVisibility);
             set(myPresenceRef, {
                 online: false,
                 lastSeen: Date.now(),
+                chatActive: false,
                 role,
             });
             unsubscribe();
@@ -68,18 +94,34 @@ export function usePresence(role) {
     return partnerPresence;
 }
 
+// Mark chat tab as active / inactive. Called by LiveChat.jsx based on tab
+// visibility + focus. Server-side /api/notify reads this to skip pushing when
+// the recipient is clearly watching the chat already.
+export function useChatActiveSignal(role, isActive) {
+    const lastRef = useRef(null);
+    useEffect(() => {
+        if (!role) return;
+        // Skip redundant writes
+        const key = `${role}:${isActive ? 1 : 0}`;
+        if (lastRef.current === key) return;
+        lastRef.current = key;
+        try {
+            update(ref(db, `presence/${role}`), {
+                chatActive: !!isActive,
+                lastSeen: Date.now(),
+            });
+        } catch { /* noop */ }
+    }, [role, isActive]);
+}
+
 export function formatLastSeen(presence) {
-    if (!presence) return null;
+    if (!presence || !presence.lastSeen) return null;
 
-    if (presence.online) {
-        // Check if heartbeat is recent (within 60s)
-        const diff = Date.now() - (presence.lastSeen || 0);
-        if (diff < 60000) return 'Online now';
-    }
-
-    if (!presence.lastSeen) return null;
-
+    // Treat as online when lastSeen is fresh regardless of `online` flag,
+    // because onDisconnect sometimes races with fast navigations.
     const diff = Date.now() - presence.lastSeen;
+    if (diff < 45000) return 'Online now';
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);

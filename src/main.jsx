@@ -13,6 +13,13 @@ import { wirePrimeOnUserGesture } from './hooks/useSounds'
 primeWords();
 wirePrimeOnUserGesture();
 
+// Disable browser auto scroll-restoration so returning to the chat tab
+// doesn't force the message container back to an old scrollTop (caused
+// chat to "jump up" randomly on focus switches).
+if (typeof history !== "undefined" && "scrollRestoration" in history) {
+    try { history.scrollRestoration = "manual"; } catch { /* noop */ }
+}
+
 const ROLE_KEY = 'ours-role';
 const AUTH_KEY = 'ours-auth';
 const CORRECT_PASSWORD = '250925';

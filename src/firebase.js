@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getFirestore } from "firebase/firestore";
+import { getMessaging, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,3 +25,20 @@ export const db = getDatabase(app);
 
 // Firestore for persistent chat messages
 export const firestore = getFirestore(app);
+
+// The config dict itself is needed to boot the FCM service worker, which runs
+// in a separate context (no access to import.meta.env). Frontend passes this
+// to the worker via a query string on the service-worker registration URL.
+export const firebaseConfigPublic = firebaseConfig;
+
+// Cloud Messaging — lazy, since not every browser supports it (Safari desktop
+// pre-16, old Chromium embedded, etc.). Returns a messaging instance or null.
+let messagingPromise = null;
+export function getMessagingIfSupported() {
+  if (!messagingPromise) {
+    messagingPromise = isSupported()
+      .then((supported) => (supported ? getMessaging(app) : null))
+      .catch(() => null);
+  }
+  return messagingPromise;
+}

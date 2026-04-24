@@ -33,9 +33,35 @@ export const useVersionCheck = () => {
         return () => { cancelled = true; };
     }, []);
 
-    // Poll for new deploys. Reload as soon as we detect a mismatch.
+    // Poll for new deploys. Only reload when the user is clearly idle —
+    // tab hidden OR last activity > 45s ago. Prevents mid-typing interruptions
+    // (previous bug: version.json bump caused full reloads while user was
+    // mid-chat, yanking scroll to old messages and losing in-flight drafts).
     useEffect(() => {
         let reloading = false;
+        let lastActivity = Date.now();
+        let pendingVersion = null;
+
+        const bumpActivity = () => { lastActivity = Date.now(); };
+        const activityEvents = ["keydown", "pointerdown", "touchstart", "wheel", "scroll", "input"];
+        activityEvents.forEach((ev) => window.addEventListener(ev, bumpActivity, { passive: true }));
+
+        const isTypingNow = () => {
+            const tag = document.activeElement?.tagName;
+            return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable;
+        };
+
+        const reloadIfSafe = () => {
+            if (reloading || !pendingVersion) return;
+            const idle = document.hidden || (Date.now() - lastActivity) > 45_000;
+            if (!idle) return;
+            if (isTypingNow()) return;
+            reloading = true;
+            const url = new URL(window.location.href);
+            url.searchParams.set("v", pendingVersion);
+            window.location.replace(url.toString());
+        };
+
         const check = () => {
             if (reloading || !currentVersionRef.current) return;
             fetch("/version.json", { cache: "no-store" })
@@ -43,21 +69,28 @@ export const useVersionCheck = () => {
                 .then((data) => {
                     if (!data || !data.version) return;
                     if (data.version !== currentVersionRef.current) {
-                        reloading = true;
-                        // Reload with a cache-busting query to force a fresh bundle.
-                        const url = new URL(window.location.href);
-                        url.searchParams.set("v", data.version);
-                        window.location.replace(url.toString());
+                        pendingVersion = data.version;
+                        reloadIfSafe();
                     }
                 })
                 .catch(() => { /* offline is fine */ });
         };
+
+        // Re-check safety periodically so a pending reload eventually fires
+        // when user goes idle.
+        const safetyTick = setInterval(reloadIfSafe, 15_000);
+
         const id = setInterval(check, POLL_MS);
         const onFocus = () => check();
+        const onVisibility = () => { if (document.hidden) reloadIfSafe(); };
         window.addEventListener("focus", onFocus);
+        document.addEventListener("visibilitychange", onVisibility);
         return () => {
             clearInterval(id);
+            clearInterval(safetyTick);
             window.removeEventListener("focus", onFocus);
+            document.removeEventListener("visibilitychange", onVisibility);
+            activityEvents.forEach((ev) => window.removeEventListener(ev, bumpActivity));
         };
     }, []);
 

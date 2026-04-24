@@ -106,6 +106,16 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const [screenshotToast, setScreenshotToast] = useState(null);
     const [autoPlayVoice, setAutoPlayVoice] = useState(true);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
+    const [presenceTick, setPresenceTick] = useState(0); // force periodic re-render for presence freshness
+
+    // Re-evaluate presence freshness every 10s so the online dot decays
+    // even if partnerPresence object itself doesn't change for a while.
+    useEffect(() => {
+        const id = setInterval(() => setPresenceTick((n) => (n + 1) & 0xffff), 10000);
+        return () => clearInterval(id);
+    }, []);
+    // Touch the tick via a ref so it's preserved through lint
+    void presenceTick;
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
@@ -121,6 +131,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     const typingTimeoutRef = useRef(null);
     const messageRefs = useRef(new Map());
     const effectsPlayedRef = useRef(new Set());
+    // Tracks which message IDs have already played their enter animation,
+    // so subsequent re-renders don't replay the initial {opacity:0,y:10,scale:0.95}.
+    const bubbleMountedRef = useRef(new Set());
     const effectsEnabledRef = useRef(true);
     const soundEnabledRef = useRef(true);
     const roleRef = useRef(null);
@@ -374,14 +387,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         const run = () => {
             const c = messagesContainerRef.current;
             if (!c) return;
-            const target = c.scrollHeight;
-            if (prevCount === 0) {
-                c.scrollTop = target; // instant snap on first load
-            } else if (typeof c.scrollTo === "function") {
-                c.scrollTo({ top: target, behavior: "smooth" });
-            } else {
-                c.scrollTop = target;
-            }
+            // Always instant — smooth scroll races with multiple rapid
+            // snapshot updates, looking like the chat "jumps" randomly.
+            c.scrollTop = c.scrollHeight;
         };
         // Double-RAF: wait for layout + paint so height includes the new message
         requestAnimationFrame(() => requestAnimationFrame(run));
@@ -402,8 +410,26 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         };
         container.addEventListener("scroll", onScroll, { passive: true });
         onScroll();
+
+        // When tab becomes visible again, if we were at the bottom, snap back.
+        // Prevents the container scrollTop being "restored" to an old offset.
+        let wasNearBottom = true;
+        const onVisible = () => {
+            if (!document.hidden && messagesContainerRef.current && wasNearBottom) {
+                const c = messagesContainerRef.current;
+                c.scrollTop = c.scrollHeight;
+            }
+            if (document.hidden && messagesContainerRef.current) {
+                const c = messagesContainerRef.current;
+                const distance = c.scrollHeight - c.scrollTop - c.clientHeight;
+                wasNearBottom = distance < NEAR_BOTTOM_PX;
+            }
+        };
+        document.addEventListener("visibilitychange", onVisible);
+
         return () => {
             container.removeEventListener("scroll", onScroll);
+            document.removeEventListener("visibilitychange", onVisible);
             if (frame) cancelAnimationFrame(frame);
         };
     }, []);
@@ -777,7 +803,12 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
         const reply = replyingTo;
         setNewMessage("");
+        // Cancel any pending draft auto-save so it doesn't re-write stale text
+        // back to localStorage after we just cleared it.
+        if (draftSaveTimerRef.current) { clearTimeout(draftSaveTimerRef.current); draftSaveTimerRef.current = null; }
         try { const key = draftKey(); if (key) localStorage.removeItem(key); } catch { /* noop */ }
+        // Reset textarea auto-grow height
+        if (inputRef.current) { inputRef.current.style.height = "auto"; }
         setShowEmojiPicker(false);
         setShowStickerPicker(false);
         setReplyingTo(null);
@@ -900,11 +931,11 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     };
 
     // Search messages
-    const filteredMessages = searchQuery.trim()
-        ? messages.filter(m =>
-            m.text?.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-        : messages;
+    const filteredMessages = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return messages;
+        return messages.filter(m => m.text?.toLowerCase().includes(q));
+    }, [messages, searchQuery]);
 
     const sendSticker = async (sticker) => {
         if (!role) return;
@@ -1210,6 +1241,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
             });
             setImagePreview(null);
             setNewMessage("");
+            if (draftSaveTimerRef.current) { clearTimeout(draftSaveTimerRef.current); draftSaveTimerRef.current = null; }
+            try { const key = draftKey(); if (key) localStorage.removeItem(key); } catch { /* noop */ }
+            if (inputRef.current) inputRef.current.style.height = "auto";
             playSendSound();
         } catch (err) {
             console.error("Send image error:", err);
@@ -1298,10 +1332,12 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         }
     };
 
-    // Filter deleted messages and group
-    const visibleMessages = filteredMessages.filter(m =>
-        !m.deletedFor?.includes(role)
-    );
+    // Filter deleted messages. Memoized so every unrelated re-render (e.g.
+    // presence tick, typing, reactions) doesn't produce a new array reference
+    // which would then invalidate every downstream useMemo.
+    const visibleMessages = useMemo(() => (
+        filteredMessages.filter(m => !m.deletedFor?.includes(role))
+    ), [filteredMessages, role]);
 
     // Archived (soft-deleted) messages with preserved content
     const archivedMessages = useMemo(() => (
@@ -1335,12 +1371,18 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         }
     };
 
-    const groupedMessages = visibleMessages.reduce((acc, msg) => {
-        const key = msg.timestamp ? formatDate(msg.timestamp) : "Now";
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(msg);
-        return acc;
-    }, {});
+    // Memoize so unchanged snapshots (e.g. read-receipt updates) don't
+    // rebuild a brand-new object and cause React to think date-group parents
+    // changed — which previously remounted some bubbles and replayed their
+    // enter animation, looking like "chat jumps back to old messages".
+    const groupedMessages = useMemo(() => (
+        visibleMessages.reduce((acc, msg) => {
+            const key = msg.timestamp ? formatDate(msg.timestamp) : "Now";
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(msg);
+            return acc;
+        }, {})
+    ), [visibleMessages]);
 
     const currentTheme = CHAT_THEMES[chatTheme];
 
@@ -1507,33 +1549,44 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 borderBottom: '1px solid var(--border-color)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ position: 'relative' }}>
-                        <span style={{ fontSize: 18 }}>{role === "haidar" ? "✉" : "✒"}</span>
-                        <span style={{
-                            position: 'absolute', bottom: -2, right: -2,
-                            width: 8, height: 8, borderRadius: '50%',
-                            border: '1.5px solid var(--bg-color)',
-                            background: partnerPresence?.online ? "var(--success-color)" :
-                                connectionStatus === "connected" ? "var(--sub-color)" :
-                                connectionStatus === "connecting" ? "var(--honey-color)" : "var(--sub-color)",
-                        }} className={(partnerPresence?.online || connectionStatus === "connecting") ? "animate-pulse" : ""} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                        <span style={{
-                            fontFamily: 'var(--font-handwritten)', fontSize: 16, fontWeight: 600,
-                            color: 'var(--text-on-card)',
-                        }}>
-                            {role === "haidar" ? "Princess" : "Haidar"}
-                        </span>
-                        <span style={{
-                            fontSize: 11, color: partnerPresence?.online ? 'var(--success-color)' : 'var(--text-dim-card)',
-                            fontFamily: 'var(--font-mono)',
-                        }}>
-                            {connectionStatus === "error" ? "offline" :
-                                connectionStatus === "connecting" ? "connecting…" :
-                                partnerPresence ? (formatLastSeen(partnerPresence) || "offline") : "live"}
-                        </span>
-                    </div>
+                    {(() => {
+                        // Treat partner as online when last heartbeat < 45s ago,
+                        // regardless of the `online` boolean (which can race
+                        // with onDisconnect). Matches formatLastSeen threshold.
+                        const freshMs = partnerPresence?.lastSeen ? Date.now() - partnerPresence.lastSeen : Infinity;
+                        const partnerOnline = freshMs < 45000;
+                        return (
+                            <>
+                                <div style={{ position: 'relative' }}>
+                                    <span style={{ fontSize: 18 }}>{role === "haidar" ? "✉" : "✒"}</span>
+                                    <span style={{
+                                        position: 'absolute', bottom: -2, right: -2,
+                                        width: 8, height: 8, borderRadius: '50%',
+                                        border: '1.5px solid var(--bg-color)',
+                                        background: partnerOnline ? "var(--success-color)" :
+                                            connectionStatus === "connected" ? "var(--sub-color)" :
+                                            connectionStatus === "connecting" ? "var(--honey-color)" : "var(--sub-color)",
+                                    }} className={(partnerOnline || connectionStatus === "connecting") ? "animate-pulse" : ""} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                                    <span style={{
+                                        fontFamily: 'var(--font-handwritten)', fontSize: 16, fontWeight: 600,
+                                        color: 'var(--text-on-card)',
+                                    }}>
+                                        {role === "haidar" ? "Princess" : "Haidar"}
+                                    </span>
+                                    <span style={{
+                                        fontSize: 11, color: partnerOnline ? 'var(--success-color)' : 'var(--text-dim-card)',
+                                        fontFamily: 'var(--font-mono)',
+                                    }}>
+                                        {connectionStatus === "error" ? "offline" :
+                                            connectionStatus === "connecting" ? "connecting…" :
+                                            partnerPresence ? (formatLastSeen(partnerPresence) || "offline") : "live"}
+                                    </span>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
                 <div className="flex items-center gap-1">
                     {/* Nudge — low-friction "still thinking of you" ping. Shows
@@ -1821,7 +1874,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto p-4 space-y-1"
                 onClick={() => setActiveReactionMessage(null)}
-                style={{ overscrollBehavior: 'contain' }}
+                style={{ overscrollBehavior: 'contain', overflowAnchor: 'none' }}
             >
                 {Object.entries(groupedMessages).map(([date, msgs]) => (
                     <div key={date}>
@@ -1900,10 +1953,14 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                     id={msg.id ? `msg-${msg.id}` : undefined}
                                     ref={(el) => {
                                         if (!msg.id) return;
-                                        if (el) messageRefs.current.set(msg.id, el);
-                                        else messageRefs.current.delete(msg.id);
+                                        if (el) {
+                                            messageRefs.current.set(msg.id, el);
+                                            bubbleMountedRef.current.add(msg.id);
+                                        } else {
+                                            messageRefs.current.delete(msg.id);
+                                        }
                                     }}
-                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    initial={msg.id && bubbleMountedRef.current.has(msg.id) ? false : { opacity: 0, y: 10, scale: 0.95 }}
                                     animate={isPulsing ? { opacity: 1, y: 0, scale: [1, 1.04, 1] } : { opacity: 1, y: 0, scale: 1 }}
                                     transition={{ duration: isPulsing ? 0.6 : 0.2, ease: "easeOut" }}
                                     className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2 relative`}

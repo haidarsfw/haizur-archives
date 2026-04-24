@@ -481,9 +481,14 @@ export default function App({ currentRole, onSwitchRole }) {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Skip all shortcuts when user is typing in an input/textarea/contenteditable
+      // (otherwise "?" grabs focus from chat input and opens the help popup).
+      const tag = document.activeElement?.tagName;
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable;
       if (e.key === "Escape") { e.preventDefault(); setIsMenuOpen(p => !p); setShowShortcuts(false); if (engine.state === 'run') engine.restart(); return; }
-      if (e.key === "?" && !isMenuOpen && activeGame !== 'typing') { e.preventDefault(); setShowShortcuts(p => !p); return; }
+      if (e.key === "?" && !isMenuOpen && activeGame !== 'typing' && !isTyping) { e.preventDefault(); setShowShortcuts(p => !p); return; }
       if (isMenuOpen || showShortcuts || !isFocused) return;
+      if (isTyping) return;
       // Ctrl+Number for quick mode switch (works from ANY mode including typing)
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.code >= 'Digit0' && e.code <= 'Digit9') {
         e.preventDefault();
@@ -495,9 +500,6 @@ export default function App({ currentRole, onSwitchRole }) {
         }
       }
       if (e.ctrlKey || e.metaKey) return;
-      // Skip shortcuts when user is typing in an input field
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
       if (e.key === "Tab") {
         e.preventDefault();
         if (activeGame === 'typing') startNewGame(session.language);
