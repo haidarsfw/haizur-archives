@@ -1,10 +1,10 @@
 {
-  "version": "1777070509753",
-  "builtAt": "2026-04-24T22:41:49.753Z",
+  "version": "1777070875131",
+  "builtAt": "2026-04-24T22:47:55.131Z",
   "highlights": [
-    "Scroll fix DEEP: useLayoutEffect cleanup pattern + stable ref-setters per bubble",
-    "CSS overflow-anchor: none di seluruh subtree chat biar browser ga pull scroll",
-    "Ref callback sekarang stable per message ID — ga detach/reattach tiap render",
-    "Notif groundwork: useWebPush hook + NotifBanner UI (belum aktif di server)"
+    "Scroll fix FINAL: posisi di-track via scroll-event, bukan useLayoutEffect cleanup",
+    "Sticker animasi scale-in dihapus total — ga ada lagi bubble yg ngerubah tinggi pas mount",
+    "Jump-to-unread pake scroll tracker yang sama — satu source of truth",
+    "Notif groundwork: useWebPush + NotifBanner + /api/notify (server env belum di-set)"
   ]
 }

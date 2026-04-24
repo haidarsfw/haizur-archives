@@ -419,70 +419,84 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         };
     }, [role, showNotification]);
 
-    // ── Sticky-scroll anchor ──────────────────────────────────────────────
-    // The "chat keeps jumping to old messages" bug = React replaces bubble
-    // DOM nodes across renders (key changes, ref remounts, whatever), and
-    // the browser's implicit scroll-anchor then picks an old element to
-    // anchor to → scrollTop pulls backwards.
+    // ── Sticky-scroll anchor (scroll-event-driven) ────────────────────────
+    // Earlier attempts used useLayoutEffect cleanup to "capture before
+    // commit" but cleanup actually runs AFTER the next commit, not before —
+    // so the capture was stale.
     //
-    // Fix uses the useLayoutEffect CLEANUP trick: the cleanup function runs
-    // BEFORE the next render's DOM mutation (at the exact spot where
-    // getSnapshotBeforeUpdate used to live in class components). So:
-    //   - Capture `scrollFromBottom` in the cleanup
-    //   - Restore `scrollFromBottom` in the effect body (right after commit)
-    // Net effect: user stays pinned to whatever they were looking at,
-    // regardless of re-renders triggered by reactions/receipts/presence.
+    // New approach: track distance-from-bottom continuously via the scroll
+    // event, and restore it after every render. The scroll event ref is
+    // always up-to-date with the user's true position. Render-time height
+    // shifts (reactions, effects, receipts, bubble layout) can no longer
+    // leak into the saved anchor.
+    //
+    // `stickyBottomRef` = boolean: was the user at the bottom when they
+    // last scrolled? If yes, snap to bottom after each render — messages
+    // that come in while reading stay below the viewport naturally.
+    //
+    // `scrollFromBottomRef` = last observed distance-from-bottom when NOT
+    // at the bottom, so scrolled-up users pin to their target message.
     const scrollFromBottomRef = useRef(0);
+    const stickyBottomRef = useRef(true);
     const firstRenderRef = useRef(true);
     const justSentRef = useRef(false);
 
-    useLayoutEffect(() => {
-        // Runs AFTER DOM commit → restore the saved distance-from-bottom
+    // Scroll-event capture — the only source of truth for user intent.
+    useEffect(() => {
         const c = messagesContainerRef.current;
-        if (!c) return undefined;
+        if (!c) return;
+        let raf = 0;
+        const onScroll = () => {
+            if (raf) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                const dist = c.scrollHeight - c.scrollTop - c.clientHeight;
+                scrollFromBottomRef.current = dist;
+                stickyBottomRef.current = dist < NEAR_BOTTOM_PX;
+                setIsNearBottomState(stickyBottomRef.current);
+            });
+        };
+        c.addEventListener("scroll", onScroll, { passive: true });
+        return () => {
+            c.removeEventListener("scroll", onScroll);
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, []);
+
+    // Post-commit restore. Runs after every render.
+    useLayoutEffect(() => {
+        const c = messagesContainerRef.current;
+        if (!c) return;
 
         if (firstRenderRef.current && messages.length > 0) {
             firstRenderRef.current = false;
-            c.scrollTop = c.scrollHeight; // initial snap to bottom
-        } else if (justSentRef.current) {
-            justSentRef.current = false;
             c.scrollTop = c.scrollHeight;
-        } else {
-            const targetTop = c.scrollHeight - scrollFromBottomRef.current - c.clientHeight;
-            const current = c.scrollTop;
-            if (Math.abs(current - targetTop) > 1) {
-                c.scrollTop = Math.max(0, targetTop);
-            }
+            stickyBottomRef.current = true;
+            scrollFromBottomRef.current = 0;
+            return;
         }
 
-        // Cleanup runs BEFORE the next render — capture snapshot there
-        return () => {
-            const c2 = messagesContainerRef.current;
-            if (!c2) return;
-            scrollFromBottomRef.current = c2.scrollHeight - c2.scrollTop - c2.clientHeight;
-        };
+        if (justSentRef.current) {
+            justSentRef.current = false;
+            c.scrollTop = c.scrollHeight;
+            stickyBottomRef.current = true;
+            scrollFromBottomRef.current = 0;
+            return;
+        }
+
+        if (stickyBottomRef.current) {
+            c.scrollTop = c.scrollHeight;
+            return;
+        }
+
+        const targetTop = c.scrollHeight - scrollFromBottomRef.current - c.clientHeight;
+        if (Math.abs(c.scrollTop - targetTop) > 1) {
+            c.scrollTop = Math.max(0, targetTop);
+        }
     });
 
-    // Track scroll position so jump-to-unread pill knows when to show
-    useEffect(() => {
-        const container = messagesContainerRef.current;
-        if (!container) return;
-        let frame = 0;
-        const onScroll = () => {
-            if (frame) return;
-            frame = requestAnimationFrame(() => {
-                frame = 0;
-                const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
-                setIsNearBottomState(distance < NEAR_BOTTOM_PX);
-            });
-        };
-        container.addEventListener("scroll", onScroll, { passive: true });
-        onScroll();
-        return () => {
-            container.removeEventListener("scroll", onScroll);
-            if (frame) cancelAnimationFrame(frame);
-        };
-    }, []);
+    // (Jump-to-unread pill state is updated inside the sticky-scroll scroll
+    // handler above — no separate listener needed.)
 
     // Unread count — partner messages not yet marked read by me
     useEffect(() => {
@@ -2081,23 +2095,16 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
                                             {isSticker ? (
                                                 isCustomSticker ? (
-                                                    <motion.img
+                                                    <img
                                                         src={msg.sticker}
                                                         alt="Custom sticker"
-                                                        initial={{ scale: 0 }}
-                                                        animate={{ scale: 1 }}
-                                                        transition={{ type: "spring", stiffness: 400 }}
-                                                        className="w-20 h-20 object-cover rounded-lg"
+                                                        className="w-20 h-20 object-cover rounded-lg block"
+                                                        draggable={false}
                                                     />
                                                 ) : (
-                                                    <motion.span
-                                                        className="text-6xl block"
-                                                        initial={{ scale: 0 }}
-                                                        animate={{ scale: 1 }}
-                                                        transition={{ type: "spring", stiffness: 400 }}
-                                                    >
+                                                    <span className="text-6xl block">
                                                         {msg.sticker}
-                                                    </motion.span>
+                                                    </span>
                                                 )
                                             ) : isImage ? (
                                                 <>

@@ -14,10 +14,10 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Scroll fix DEEP: useLayoutEffect cleanup pattern + stable ref-setters per bubble",
-    "CSS overflow-anchor: none di seluruh subtree chat biar browser ga pull scroll",
-    "Ref callback sekarang stable per message ID — ga detach/reattach tiap render",
-    "Notif groundwork: useWebPush hook + NotifBanner UI (belum aktif di server)",
+    "Scroll fix FINAL: posisi di-track via scroll-event, bukan useLayoutEffect cleanup",
+    "Sticker animasi scale-in dihapus total — ga ada lagi bubble yg ngerubah tinggi pas mount",
+    "Jump-to-unread pake scroll tracker yang sama — satu source of truth",
+    "Notif groundwork: useWebPush + NotifBanner + /api/notify (server env belum di-set)",
 ];
 
 const payload = {
