@@ -14,11 +14,10 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Sticky-scroll: chat ngunci ke jarak-dari-bawah lewat useLayoutEffect. Ga jumps lagi.",
-    "Limit chat naik ke 2000 pesan — pesan lama tetap visible, ga keapus",
-    "Snap ke bawah pas kirim/terima pesan kalau lagi di bawah",
-    "Bubble animation off 100% — reaksi/receipt update ga nge-replay animasi",
-    "focus() pake preventScroll, scroll-anchor disabled di container",
+    "Scroll fix DEEP: useLayoutEffect cleanup pattern + stable ref-setters per bubble",
+    "CSS overflow-anchor: none di seluruh subtree chat biar browser ga pull scroll",
+    "Ref callback sekarang stable per message ID — ga detach/reattach tiap render",
+    "Notif groundwork: useWebPush hook + NotifBanner UI (belum aktif di server)",
 ];
 
 const payload = {

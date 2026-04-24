@@ -22,7 +22,7 @@ import {
 } from "firebase/firestore";
 import AudioCall from "./AudioCall";
 import { useSounds } from "./hooks/useSounds";
-import { formatLastSeen } from "./hooks/usePresence";
+import { formatLastSeen, useChatActiveSignal } from "./hooks/usePresence";
 import { useHaptics } from "./hooks/useHaptics";
 import { useReducedMotion } from "./hooks/useReducedMotion";
 import MessageEffect, { shouldTriggerEffect } from "./MessageEffects";
@@ -31,6 +31,8 @@ import ChatEmojiPicker from "./ChatEmojiPicker";
 import ChatArchivePanel from "./ChatArchivePanel";
 import LinkPreview from "./LinkPreview";
 import { formatMessageText, extractFirstUrl } from "./chatTextFormat";
+import { useWebPush } from "./hooks/useWebPush";
+import NotifBanner from "./NotifBanner";
 
 // Chat theme presets
 const CHAT_THEMES = {
@@ -134,12 +136,36 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     // Tracks which message IDs have already played their enter animation,
     // so subsequent re-renders don't replay the initial {opacity:0,y:10,scale:0.95}.
     const bubbleMountedRef = useRef(new Set());
+
+    // Memoized ref-setter factory — same callback identity per message id,
+    // so React doesn't detach/reattach the DOM ref on every render (which
+    // was triggering a scroll-anchor recalculation and pulling the view up).
+    const bubbleRefSetters = useRef(new Map());
+    const getBubbleRef = useCallback((id) => {
+        if (!id) return undefined;
+        if (!bubbleRefSetters.current.has(id)) {
+            bubbleRefSetters.current.set(id, (el) => {
+                if (el) {
+                    messageRefs.current.set(id, el);
+                    bubbleMountedRef.current.add(id);
+                } else {
+                    messageRefs.current.delete(id);
+                }
+            });
+        }
+        return bubbleRefSetters.current.get(id);
+    }, []);
     const effectsEnabledRef = useRef(true);
     const soundEnabledRef = useRef(true);
     const roleRef = useRef(null);
     const sounds = useSounds();
     const soundsRef = useRef(sounds);
     const haptic = useHaptics();
+    const webPush = useWebPush(role);
+    // chat-active signal: inform presence when user is actively viewing chat
+    // so server-side notify skips push to avoid redundant notifications.
+    const chatActive = isPopup && role && !!role; // popup open == chat active
+    useChatActiveSignal(role, chatActive);
     const reducedMotion = useReducedMotion();
     const [activeEffects, setActiveEffects] = useState([]);
     const lastNudgeSentRef = useRef(0);
@@ -394,51 +420,47 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
     }, [role, showNotification]);
 
     // ── Sticky-scroll anchor ──────────────────────────────────────────────
-    // The "chat keeps jumping to old messages" symptom was caused by the
-    // browser's native scroll anchoring + any mid-render layout shift
-    // (reaction badge appearing, read receipt flipping, avatar dot updating
-    //  → scrollHeight changes → browser tries to "keep the top visible" and
-    //  pulls scrollTop backwards).
+    // The "chat keeps jumping to old messages" bug = React replaces bubble
+    // DOM nodes across renders (key changes, ref remounts, whatever), and
+    // the browser's implicit scroll-anchor then picks an old element to
+    // anchor to → scrollTop pulls backwards.
     //
-    // Strategy: record the user's distance-from-bottom just BEFORE React
-    // mutates the DOM (useLayoutEffect without deps = runs each render), and
-    // restore the same distance-from-bottom right AFTER. This way:
-    //   - User at bottom → stays pinned to bottom on new content
-    //   - User scrolled up to Dec 19 → stays pinned to Dec 19
-    //   - Internal render-induced height shifts are absorbed silently
+    // Fix uses the useLayoutEffect CLEANUP trick: the cleanup function runs
+    // BEFORE the next render's DOM mutation (at the exact spot where
+    // getSnapshotBeforeUpdate used to live in class components). So:
+    //   - Capture `scrollFromBottom` in the cleanup
+    //   - Restore `scrollFromBottom` in the effect body (right after commit)
+    // Net effect: user stays pinned to whatever they were looking at,
+    // regardless of re-renders triggered by reactions/receipts/presence.
     const scrollFromBottomRef = useRef(0);
     const firstRenderRef = useRef(true);
     const justSentRef = useRef(false);
 
-    // Capture BEFORE paint
     useLayoutEffect(() => {
+        // Runs AFTER DOM commit → restore the saved distance-from-bottom
         const c = messagesContainerRef.current;
-        if (!c) return;
-        scrollFromBottomRef.current = c.scrollHeight - c.scrollTop - c.clientHeight;
-    });
+        if (!c) return undefined;
 
-    // Restore AFTER paint — runs after every render so no snapshot can pull
-    // the view to an old message behind our backs.
-    useLayoutEffect(() => {
-        const c = messagesContainerRef.current;
-        if (!c) return;
         if (firstRenderRef.current && messages.length > 0) {
             firstRenderRef.current = false;
-            c.scrollTop = c.scrollHeight; // initial: snap to bottom
-            return;
-        }
-        if (justSentRef.current) {
+            c.scrollTop = c.scrollHeight; // initial snap to bottom
+        } else if (justSentRef.current) {
             justSentRef.current = false;
             c.scrollTop = c.scrollHeight;
-            return;
+        } else {
+            const targetTop = c.scrollHeight - scrollFromBottomRef.current - c.clientHeight;
+            const current = c.scrollTop;
+            if (Math.abs(current - targetTop) > 1) {
+                c.scrollTop = Math.max(0, targetTop);
+            }
         }
-        const targetTop = c.scrollHeight - scrollFromBottomRef.current - c.clientHeight;
-        const current = c.scrollTop;
-        // Only write if delta > 1px — avoid gratuitous writes that can
-        // interrupt user momentum-scrolls on iOS.
-        if (Math.abs(current - targetTop) > 1) {
-            c.scrollTop = Math.max(0, targetTop);
-        }
+
+        // Cleanup runs BEFORE the next render — capture snapshot there
+        return () => {
+            const c2 = messagesContainerRef.current;
+            if (!c2) return;
+            scrollFromBottomRef.current = c2.scrollHeight - c2.scrollTop - c2.clientHeight;
+        };
     });
 
     // Track scroll position so jump-to-unread pill knows when to show
@@ -1754,6 +1776,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 </div>
             </div>
 
+            {/* Notif enable / email capture banner */}
+            {role && <NotifBanner role={role} webPush={webPush} />}
+
             {/* Theme picker */}
             <AnimatePresence>
                 {showThemePicker && (
@@ -1907,6 +1932,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                 className="flex-1 overflow-y-auto p-4 space-y-1"
                 onClick={() => setActiveReactionMessage(null)}
                 style={{ overscrollBehavior: 'contain', overflowAnchor: 'none' }}
+                data-chat-container="true"
             >
                 {Object.entries(groupedMessages).map(([date, msgs]) => (
                     <div key={date}>
@@ -1983,15 +2009,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                     )}
                                 <motion.div
                                     id={msg.id ? `msg-${msg.id}` : undefined}
-                                    ref={(el) => {
-                                        if (!msg.id) return;
-                                        if (el) {
-                                            messageRefs.current.set(msg.id, el);
-                                            bubbleMountedRef.current.add(msg.id);
-                                        } else {
-                                            messageRefs.current.delete(msg.id);
-                                        }
-                                    }}
+                                    ref={getBubbleRef(msg.id)}
                                     initial={false}
                                     animate={isPulsing ? { opacity: 1, y: 0, scale: [1, 1.04, 1] } : { opacity: 1, y: 0, scale: 1 }}
                                     transition={{ duration: isPulsing ? 0.6 : 0, ease: "easeOut" }}

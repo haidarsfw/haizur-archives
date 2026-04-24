@@ -1747,3 +1747,12 @@ body.skip-entry-anims *::after {
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
+
+/* Kill browser scroll anchoring everywhere inside the chat container.
+   Without this, any layout shift (reaction appearing, receipt flipping,
+   bubble remount) can cause Chrome/Safari to silently pull scrollTop
+   backwards to "keep" a prior anchor element in view. */
+[data-chat-container="true"],
+[data-chat-container="true"] * {
+  overflow-anchor: none !important;
+}
