@@ -14,11 +14,11 @@ const VERSION = process.env.VITE_BUILD_ID || String(Date.now());
 // Keep entries short + friendly. This list is what the "ada yang baru"
 // modal shows, so update it each time you ship user-facing changes.
 const HIGHLIGHTS = [
-    "Fix: chat bener-bener ga random jump ke atas lagi (overflowAnchor + scroll-restore off)",
-    "Fix: draft tetap masih kelihatan setelah kirim — sekarang bener-bener bersih",
-    "Fix: tombol ? pas ngetik di chat ga buka popup help lagi",
-    "Live presence lebih akurat: heartbeat 10 detik + online dot auto-decay tiap 10s",
-    "Auto-refresh nunggu kamu idle dulu biar ga ganggu pas chat",
+    "Fix BESAR: chat query sekarang ambil 500 pesan terbaru (dulu 500 terlama — pesan baru ilang),",
+    "Fix: cache-snapshot Firestore yang basi ga flash lagi di awal load",
+    "Fix: focus input ga lompatin scroll container — `preventScroll: true`",
+    "Enter-animation pesan dimatiin — bubble ga muncul ulang pas reaction/receipt update",
+    "Presence: heartbeat 10s + activity bumps, online dot bener-bener decay",
 ];
 
 const payload = {

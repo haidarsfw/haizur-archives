@@ -322,9 +322,14 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
             });
         }, 10000);
 
+        // IMPORTANT: desc + limit + client-side reverse.
+        // Previously this was `asc + limit(500)` which returns the OLDEST 500
+        // messages once the collection grows past 500 — new messages silently
+        // stopped appearing and the chat looked "stuck in the past". Ordering
+        // by desc ensures we always pin the most-recent window.
         const q = query(
             collection(firestore, "chat-messages"),
-            orderBy("timestamp", "asc"),
+            orderBy("timestamp", "desc"),
             limit(500)
         );
 
@@ -332,7 +337,15 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
             (snapshot) => {
                 clearTimeout(timeoutId);
                 setConnectionStatus("connected");
-                const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Skip the very first cache-only snapshot — onSnapshot fires
+                // a cached snapshot first when offline/just-connected, which
+                // briefly flashes stale data and looks like "chat jumping to
+                // old messages" before the fresh snapshot arrives.
+                if (snapshot.metadata.fromCache && lastMessageCountRef.current === 0 && snapshot.docs.length === 0) {
+                    return;
+                }
+                const reversed = snapshot.docs.slice().reverse();
+                const msgs = reversed.map(doc => ({ id: doc.id, ...doc.data() }));
                 const currentRole = roleRef.current;
 
                 if (lastMessageCountRef.current === 0 && msgs.length > 0) {
@@ -447,7 +460,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
 
     // Focus input
     useEffect(() => {
-        if (role && inputRef.current) setTimeout(() => inputRef.current?.focus(), 300);
+        if (role && inputRef.current) setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 300);
     }, [role, showEmojiPicker, showStickerPicker]);
 
     const selectRole = async (selectedRole) => {
@@ -1195,7 +1208,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         try {
             const compressed = await compressImage(file, 600, 0.8);
             setImagePreview(compressed);
-            inputRef.current?.focus();
+            inputRef.current?.focus({ preventScroll: true });
         } catch {
             setError("Failed to process image");
         }
@@ -1304,7 +1317,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
         setEditingMessage({ id: msg.id, originalText: msg.text });
         setNewMessage(msg.text);
         setReplyingTo(null);
-        inputRef.current?.focus();
+        inputRef.current?.focus({ preventScroll: true });
     };
 
     const cancelEdit = () => {
@@ -1960,9 +1973,9 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                             messageRefs.current.delete(msg.id);
                                         }
                                     }}
-                                    initial={msg.id && bubbleMountedRef.current.has(msg.id) ? false : { opacity: 0, y: 10, scale: 0.95 }}
+                                    initial={false}
                                     animate={isPulsing ? { opacity: 1, y: 0, scale: [1, 1.04, 1] } : { opacity: 1, y: 0, scale: 1 }}
-                                    transition={{ duration: isPulsing ? 0.6 : 0.2, ease: "easeOut" }}
+                                    transition={{ duration: isPulsing ? 0.6 : 0, ease: "easeOut" }}
                                     className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2 relative`}
                                     drag={isMobile && !isDeleted ? "x" : false}
                                     dragDirectionLock
@@ -1974,7 +1987,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                         if (Math.abs(offset) >= 60) {
                                             setReplyingTo(msg);
                                             haptic.tap();
-                                            setTimeout(() => inputRef.current?.focus(), 80);
+                                            setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 80);
                                         }
                                     }}
                                 >
@@ -2339,7 +2352,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                                                         <motion.button
                                                             whileHover={{ scale: 1.2 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveReactionMessage(null); inputRef.current?.focus(); haptic.tap(); }}
+                                                            onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveReactionMessage(null); inputRef.current?.focus({ preventScroll: true }); haptic.tap(); }}
                                                             className="text-base p-0.5 hover:bg-[rgba(255,255,255,0.08)] rounded-full transition-colors"
                                                             title="Reply"
                                                         >
@@ -2459,7 +2472,7 @@ const LiveChat = ({ theme, isPopup = false, partnerPresence = null }) => {
                     >
                         <div style={{ padding: 8 }}>
                             <ChatEmojiPicker
-                                onPick={(emoji) => { setNewMessage(prev => prev + emoji); inputRef.current?.focus(); }}
+                                onPick={(emoji) => { setNewMessage(prev => prev + emoji); inputRef.current?.focus({ preventScroll: true }); }}
                             />
                         </div>
                     </motion.div>
