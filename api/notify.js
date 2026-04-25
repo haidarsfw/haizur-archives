@@ -100,59 +100,11 @@ export default async function handler(req, res) {
     if (!recipientRole || !senderRole) return res.status(400).json({ error: "recipientRole + senderRole required" });
     if (recipientRole === senderRole) return res.status(200).json({ skipped: "same role" });
 
-    // Diagnostic: allow caller to peek env shape without exposing secrets
+    // Lightweight health probe — no secrets exposed
     if (body?.__diag === true) {
-        const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "";
-        let pkLen = 0, pkNewlines = 0, pkCR = 0, pkLiteralBS = 0, parseOk = false, projectId = null;
-        let pkHead = "", pkTail = "", pkByteHex = "";
-        let postFixHead = "", postFixTail = "", postFixLen = 0, certInitErr = null;
-        try {
-            const parsed = JSON.parse(raw);
-            parseOk = true;
-            projectId = parsed.project_id || null;
-            const pk = parsed.private_key || "";
-            pkLen = pk.length;
-            pkNewlines = (pk.match(/\n/g) || []).length;
-            pkCR = (pk.match(/\r/g) || []).length;
-            pkLiteralBS = (pk.match(/\\n/g) || []).length;
-            pkHead = pk.slice(0, 40);
-            pkTail = pk.slice(-40);
-            pkByteHex = Array.from(pk.slice(0, 80)).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join(" ");
-
-            // Apply same fix the initAdmin uses + try cert init
-            let pk2 = pk.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
-            pk2 = pk2
-                .replace(/-----\s*BEGIN\s+PRIVATE\s+KEY\s*-----/g, "-----BEGIN PRIVATE KEY-----")
-                .replace(/-----\s*END\s+PRIVATE\s+KEY\s*-----/g, "-----END PRIVATE KEY-----");
-            postFixHead = pk2.slice(0, 40);
-            postFixTail = pk2.slice(-40);
-            postFixLen = pk2.length;
-            try {
-                const fixedCreds = { ...parsed, private_key: pk2 };
-                if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(fixedCreds) });
-            } catch (e) {
-                certInitErr = String(e?.message || e);
-            }
-        } catch (e) {
-            certInitErr = "outer: " + String(e?.message || e);
-        }
         return res.status(200).json({
-            diag: true,
-            buildTag: "notify-v4",
-            envRawLen: raw.length,
-            parseOk,
-            projectId,
-            pkLen,
-            pkNewlines,
-            pkCR,
-            pkLiteralBS,
-            pkHead,
-            pkTail,
-            pkByteHex,
-            postFixLen,
-            postFixHead,
-            postFixTail,
-            certInitErr,
+            ok: true,
+            hasServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
             hasDbUrl: !!process.env.FIREBASE_DATABASE_URL,
             hasResendKey: !!process.env.RESEND_API_KEY,
         });
