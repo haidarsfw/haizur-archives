@@ -28,19 +28,25 @@ function initAdmin() {
     } catch (e) {
         throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON: " + e.message);
     }
-    // Normalize private_key newlines. Vercel's env UI does NOT interpret
-    // `\n` escapes on a single-line paste — the key comes through with
-    // literal "\n" sequences. Also tolerate Windows-style `\r\n`.
+    // Normalize private_key — Vercel's env UI mangles the paste in several
+    // subtle ways. Defensive cleanup:
+    //  1. \r\n → \n
+    //  2. literal "\n" strings → real \n
+    //  3. `-----BEGIN  PRIVATE  KEY-----` (multiple spaces) → collapse to single
+    //  4. no newlines at all → wrap body at 64 chars
     if (credentials.private_key) {
         let pk = credentials.private_key;
         if (pk.includes("\\n")) pk = pk.replace(/\\n/g, "\n");
         pk = pk.replace(/\r\n/g, "\n");
-        // If the header/footer are still on the same line as the body, repair
+        // Collapse extra whitespace inside BEGIN / END markers
+        pk = pk
+            .replace(/-----\s*BEGIN\s+PRIVATE\s+KEY\s*-----/g, "-----BEGIN PRIVATE KEY-----")
+            .replace(/-----\s*END\s+PRIVATE\s+KEY\s*-----/g, "-----END PRIVATE KEY-----");
+        // If body is one giant line, wrap at 64 chars
         if (!pk.includes("\n") && pk.includes("-----BEGIN PRIVATE KEY-----")) {
             pk = pk
                 .replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
                 .replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----");
-            // Break body into 64-char lines
             const [header, rest] = pk.split("-----BEGIN PRIVATE KEY-----\n");
             const [body, footer] = (rest || "").split("\n-----END PRIVATE KEY-----");
             if (body) {
