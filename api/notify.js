@@ -105,6 +105,7 @@ export default async function handler(req, res) {
         const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "";
         let pkLen = 0, pkNewlines = 0, pkCR = 0, pkLiteralBS = 0, parseOk = false, projectId = null;
         let pkHead = "", pkTail = "", pkByteHex = "";
+        let postFixHead = "", postFixTail = "", postFixLen = 0, certInitErr = null;
         try {
             const parsed = JSON.parse(raw);
             parseOk = true;
@@ -116,12 +117,28 @@ export default async function handler(req, res) {
             pkLiteralBS = (pk.match(/\\n/g) || []).length;
             pkHead = pk.slice(0, 40);
             pkTail = pk.slice(-40);
-            // Hex of first 80 bytes so we can see hidden chars
             pkByteHex = Array.from(pk.slice(0, 80)).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join(" ");
-        } catch { /* noop */ }
+
+            // Apply same fix the initAdmin uses + try cert init
+            let pk2 = pk.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
+            pk2 = pk2
+                .replace(/-----\s*BEGIN\s+PRIVATE\s+KEY\s*-----/g, "-----BEGIN PRIVATE KEY-----")
+                .replace(/-----\s*END\s+PRIVATE\s+KEY\s*-----/g, "-----END PRIVATE KEY-----");
+            postFixHead = pk2.slice(0, 40);
+            postFixTail = pk2.slice(-40);
+            postFixLen = pk2.length;
+            try {
+                const fixedCreds = { ...parsed, private_key: pk2 };
+                if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(fixedCreds) });
+            } catch (e) {
+                certInitErr = String(e?.message || e);
+            }
+        } catch (e) {
+            certInitErr = "outer: " + String(e?.message || e);
+        }
         return res.status(200).json({
             diag: true,
-            buildTag: "notify-v3",
+            buildTag: "notify-v4",
             envRawLen: raw.length,
             parseOk,
             projectId,
@@ -132,6 +149,10 @@ export default async function handler(req, res) {
             pkHead,
             pkTail,
             pkByteHex,
+            postFixLen,
+            postFixHead,
+            postFixTail,
+            certInitErr,
             hasDbUrl: !!process.env.FIREBASE_DATABASE_URL,
             hasResendKey: !!process.env.RESEND_API_KEY,
         });
